@@ -385,10 +385,10 @@ export function ConversationList() {
                 <SquareKanban className="h-3.5 w-3.5" />
               </button>
             </div>
-            <p className="hidden shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400 lg:block">
-              use <kbd className={keyBadgeClass}>↑</kbd> and{" "}
-              <kbd className={keyBadgeClass}>↓</kbd> to navigate menu,{" "}
-              <kbd className={keyBadgeClass}>→</kbd> to open.
+            <p className="hidden shrink-0 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 lg:block">
+              Use <kbd className={keyBadgeClass}>↑</kbd> and{" "}
+              <kbd className={keyBadgeClass}>↓</kbd> to navigate menu.{" "}
+              <kbd className={keyBadgeClass}>→</kbd> or <kbd className={keyBadgeClass}>Enter</kbd> to open a chat.
             </p>
           </div>
 

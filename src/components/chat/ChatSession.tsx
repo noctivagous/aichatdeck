@@ -86,9 +86,8 @@ export function ChatSession({
   const { columnCount, setColumns } = usePageColumns();
   const { fontScale, setReplyFontScale } = useReplyFontSize();
   const { lineHeight } = useReplyLineHeight();
-  const { centerNewPages, setCenterNewPagesEnabled } = useCenterNewPages();
-  const { autoFollowLiveReply, setAutoFollowLiveReplyEnabled } =
-    useAutoFollowLiveReply();
+  const { centerNewPages } = useCenterNewPages();
+  const { autoFollowLiveReply } = useAutoFollowLiveReply();
   const { sidebarOpen, toggleSidebar } = useSessionOutlineSidebar();
   const slidesTrackRef = useRef<SlidesTrackHandle>(null);
   const navigateHandledRef = useRef(false);
@@ -555,9 +554,7 @@ export function ChatSession({
           initialFocusedPageIndex={focusedPageIndex}
           onFocusedPageChange={handleFocusedPageChange}
           centerNewPages={centerNewPages}
-          onCenterNewPagesChange={setCenterNewPagesEnabled}
           autoFollowLiveReply={autoFollowLiveReply}
-          onAutoFollowLiveReplyChange={setAutoFollowLiveReplyEnabled}
         />
       </div>
       </div>

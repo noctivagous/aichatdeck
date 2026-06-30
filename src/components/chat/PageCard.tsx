@@ -191,7 +191,7 @@ export const PageCard = memo(function PageCard({
   return (
     <article
       className={cn(
-        "slide shrink-0 h-[min(680px,calc(100%-16px))] max-w-[92vw] cursor-pointer snap-center",
+        "slide shrink-0 h-[min(2680px,calc(100%-25px))] max-w-[92vw] cursor-pointer snap-center",
         isFocused && "snap-always",
       )}
       style={{ width: `${widthPx}px` }}
@@ -211,7 +211,7 @@ export const PageCard = memo(function PageCard({
     >
       <div
         className={cn(
-          "relative flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] border border-zinc-200/70 bg-white shadow-[0_20px_60px_-25px_rgba(0,0,0,0.35)] dark:border-zinc-800 dark:bg-zinc-900",
+          "relative flex h-full min-h-0 flex-col overflow-hidden rounded-[0px] border border-zinc-200/70 bg-white shadow-[0_20px_60px_-25px_rgba(0,0,0,0.35)] dark:border-zinc-800 dark:bg-zinc-900",
           isLive && "ring-1 ring-blue-500/20",
           isFocused && "ring-2 ring-blue-500/35",
         )}

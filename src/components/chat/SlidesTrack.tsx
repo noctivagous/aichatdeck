@@ -49,9 +49,7 @@ type SlidesTrackProps = {
   initialFocusedPageIndex: number;
   onFocusedPageChange: (index: number) => void;
   centerNewPages: boolean;
-  onCenterNewPagesChange: (enabled: boolean) => void;
   autoFollowLiveReply: boolean;
-  onAutoFollowLiveReplyChange: (enabled: boolean) => void;
 };
 
 export type SlidesTrackHandle = {
@@ -77,9 +75,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   initialFocusedPageIndex,
   onFocusedPageChange,
   centerNewPages,
-  onCenterNewPagesChange,
   autoFollowLiveReply,
-  onAutoFollowLiveReplyChange,
 }, ref) {
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -693,10 +689,6 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
           <Composer
             value={composerValue}
             onChange={onComposerChange}
-            centerNewPages={centerNewPages}
-            onCenterNewPagesChange={onCenterNewPagesChange}
-            autoFollowLiveReply={autoFollowLiveReply}
-            onAutoFollowLiveReplyChange={onAutoFollowLiveReplyChange}
             onFocusChange={setComposerFocused}
             onSend={() => {
               if (hasLivePage && !isLive) focusPage(livePageIndex, true);

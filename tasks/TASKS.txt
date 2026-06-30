@@ -30,12 +30,18 @@ Regular = determined by AI
 
 ## Chat Features
 
+- Enable right-click and contextual menu.
+Will act on highlighted text row an unhighlighted
+word, or highlighted text.
+
 - Markdown for clickable popover terms.
 The AI includes terms in bold but is told
 to surround them in a markdown tag that
 indicates it is a term that could be clicked
 on for the user to get a definition in
-a popover or start a new slide.
+a popover or start a new slide.  It will have
+an outline on hover to indicate it can be
+clicked on.
 - The user highlights text and one of the
 popover options that appears is "open in new
 chat"
@@ -46,6 +52,46 @@ checked and embeds them in the response.
 - Tell AI to wrap questions at the end
 with markdown tags so that AIChatDeck will
 render them as buttons.
+
+
+---
+
+- The width should have two modes: custom and auto, which sets
+the width of a slide to the width of the slide container
+minus 100pt on each side so that the user sees
+the presence of a a slide on either side or if it is
+the currently the last or the first slide.  This value
+of the remainder on either side should be a setting
+in Settings.
+
+- We should have app routes.  For the main menu it would be / with 
+there being two paths for the views
+
+
+- Slide Pagination. It would normally be good to have two or three
+columns but the issue is that the user is reading
+them inside a scrolling frame, so the portions
+that are multi-column would have to fit inside
+the scrolling the frame's height, being slightly less.
+perhaps, for a multi-column view of the slide's contents,
+we might then have a heuristic procedure that, in response to
+the height of the viewport and the set width of the slides, 
+breaks the slide into underlying layout
+sections so that if any sections placed into columns 
+exceed the height of the slide's content container,
+they are divided into portions for scrolling.
+the text will flow row-major.  
+It will also skip tables, as it does now, 
+and account for other conditions.  when the user
+resizes the browser or the slide width parameter,
+we want this same procedure to be executed again.
+Along the way what is important to note is that
+right now at three columns the text will overflow to the right
+and get clipped.  It could be that even with three
+columns there can be a minimum width underneath which 
+three columns turns into two and and then one
+where two turns into one, because column width has
+to matter
 
 
 ## Chat Types

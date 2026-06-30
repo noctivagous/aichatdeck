@@ -23,11 +23,56 @@ import {
   type StorageHealth,
 } from "@/lib/storage/client";
 import { useReplyLineHeight } from "@/hooks/useReplyLineHeight";
+import { useCenterNewPages } from "@/hooks/useCenterNewPages";
+import { useAutoFollowLiveReply } from "@/hooks/useAutoFollowLiveReply";
 import {
   isReplyLineHeightId,
   REPLY_LINE_HEIGHTS,
   replyLineHeightLabel,
 } from "@/lib/reply-line-height";
+import { cn } from "@/lib/utils";
+
+function SettingsToggle({
+  label,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (enabled: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          {label}
+        </p>
+        <p className="text-sm text-zinc-500">{description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onCheckedChange(!checked)}
+        className={cn(
+          "relative mt-0.5 inline-flex h-6 w-11 shrink-0 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30",
+          checked ? "bg-blue-500" : "bg-zinc-300 dark:bg-zinc-600",
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            "absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200",
+            checked && "translate-x-5",
+          )}
+        />
+      </button>
+    </div>
+  );
+}
 
 export function SettingsPage() {
   const {
@@ -43,6 +88,9 @@ export function SettingsPage() {
 
   const [storage, setStorage] = useState<StorageHealth | null>(null);
   const { lineHeight, setReplyLineHeight } = useReplyLineHeight();
+  const { centerNewPages, setCenterNewPagesEnabled } = useCenterNewPages();
+  const { autoFollowLiveReply, setAutoFollowLiveReplyEnabled } =
+    useAutoFollowLiveReply();
 
   useEffect(() => {
     void (async () => {
@@ -115,6 +163,29 @@ export function SettingsPage() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+      </div>
+
+      <div className="mb-8 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <Label>Chat scrolling</Label>
+            <p className="text-sm text-zinc-500">
+              Control how pages move while you chat and when replies stream in.
+            </p>
+          </div>
+          <SettingsToggle
+            label="Center new pages"
+            description="When enabled, newly sealed pages scroll into view and center automatically."
+            checked={centerNewPages}
+            onCheckedChange={setCenterNewPagesEnabled}
+          />
+          <SettingsToggle
+            label="Auto-follow live reply"
+            description="When enabled, the live slide auto-scrolls as reply tokens stream in."
+            checked={autoFollowLiveReply}
+            onCheckedChange={setAutoFollowLiveReplyEnabled}
+          />
         </div>
       </div>
 
