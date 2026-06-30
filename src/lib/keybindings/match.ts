@@ -35,9 +35,21 @@ export function matchKey(event: KeyboardEvent, chord: KeyChord): boolean {
     case "arrowright":
       return key === "arrowright" && !event.altKey && !event.metaKey && !event.ctrlKey;
     case "arrowup":
-      return key === "arrowup" && !event.altKey && !event.metaKey && !event.ctrlKey;
+      return key === "arrowup" && !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
     case "arrowdown":
-      return key === "arrowdown" && !event.altKey && !event.metaKey && !event.ctrlKey;
+      return key === "arrowdown" && !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
+    case "shift+arrowup":
+      return key === "arrowup" && event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
+    case "shift+arrowdown":
+      return key === "arrowdown" && event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
+    case "pageup":
+      return key === "pageup" && !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
+    case "pagedown":
+      return key === "pagedown" && !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
+    case "shift+pageup":
+      return key === "pageup" && event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
+    case "shift+pagedown":
+      return key === "pagedown" && event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
     case "alt+arrowleft":
       return key === "arrowleft" && event.altKey && !event.metaKey && !event.ctrlKey;
     case "alt+arrowright":
@@ -56,6 +68,12 @@ const SHORTCUT_LABELS: Record<KeyChord, { mac: string; other: string }> = {
   arrowright: { mac: "→", other: "→" },
   arrowup: { mac: "↑", other: "↑" },
   arrowdown: { mac: "↓", other: "↓" },
+  "shift+arrowup": { mac: "⇧↑", other: "Shift+↑" },
+  "shift+arrowdown": { mac: "⇧↓", other: "Shift+↓" },
+  pageup: { mac: "PgUp", other: "PgUp" },
+  pagedown: { mac: "PgDn", other: "PgDn" },
+  "shift+pageup": { mac: "⇧PgUp", other: "Shift+PgUp" },
+  "shift+pagedown": { mac: "⇧PgDn", other: "Shift+PgDn" },
   "alt+arrowleft": { mac: "⌥←", other: "Alt+←" },
   "alt+arrowright": { mac: "⌥→", other: "Alt+→" },
   "alt+m": { mac: "⌥M", other: "Alt+M" },
@@ -65,3 +83,6 @@ export function formatShortcut(chord: KeyChord): string {
   const labels = SHORTCUT_LABELS[chord];
   return MAC ? labels.mac : labels.other;
 }
+
+export const keyBadgeClass =
+  "mx-0.5 inline-flex min-h-[18px] min-w-[18px] items-center justify-center rounded border border-zinc-200 bg-zinc-100 px-1 font-sans text-[10px] font-medium leading-none text-zinc-600 shadow-[0_1px_0_rgba(0,0,0,0.06)] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:shadow-[0_1px_0_rgba(255,255,255,0.04)]";

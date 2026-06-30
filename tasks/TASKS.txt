@@ -105,3 +105,6 @@ with controls at upper right
 - [ ] Progress a chat rightward or branch downward (multiple tracks for a single slide)
 - [ ] Navigate up and down between tracks
 
+## Mobile / Tablet
+
+Make sure the main menu has a good SPA layout for mobile devices.  

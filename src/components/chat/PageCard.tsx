@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import type { PageColumnCount } from "@/lib/page-columns";
 import type { ReplyFontScaleId } from "@/lib/reply-font-size";
 import type { ReplyLineHeightId } from "@/lib/reply-line-height";
+import { ScrollShortcutHint } from "./ScrollShortcutHint";
 import { messageText } from "@/lib/tokens";
 import { PageSlugPlanProvider } from "./heading-slug-context";
 
@@ -15,6 +16,7 @@ type PageCardProps = {
   page: PageView;
   isLive: boolean;
   isFocused?: boolean;
+  composerFocused?: boolean;
   isStreaming: boolean;
   streamingMessageId?: string;
   widthPx: number;
@@ -30,6 +32,7 @@ export const PageCard = memo(function PageCard({
   page,
   isLive,
   isFocused = false,
+  composerFocused = false,
   isStreaming,
   streamingMessageId,
   widthPx,
@@ -130,6 +133,11 @@ export const PageCard = memo(function PageCard({
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
+            {isFocused ? (
+              <span className="shrink-0 rounded-md border border-zinc-200/80 bg-zinc-50/80 px-1.5 py-0.5 text-[11px] text-zinc-500 dark:border-zinc-700/80 dark:bg-zinc-800/50 dark:text-zinc-400">
+                <ScrollShortcutHint composerFocused={composerFocused} />
+              </span>
+            ) : null}
             <span className="text-[11px] text-zinc-500">
               {page.messages.length} msgs
             </span>
@@ -209,6 +217,7 @@ export const PageCard = memo(function PageCard({
     prev.columnCount === next.columnCount &&
     prev.fontScale === next.fontScale &&
     prev.lineHeight === next.lineHeight &&
-    prev.isFocused === next.isFocused
+    prev.isFocused === next.isFocused &&
+    prev.composerFocused === next.composerFocused
   );
 });

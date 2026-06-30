@@ -34,14 +34,12 @@ import { SessionOutlineSidebar } from "./SessionOutlineSidebar";
 import { computePages } from "@/lib/pages";
 import { buildSessionOutline } from "@/lib/session-outline";
 import { buildChatNavigateHref } from "@/lib/chat-navigation";
+import { keyBadgeClass } from "@/lib/keybindings/match";
 import { pushWithViewTransition } from "@/lib/view-transition-nav";
 
 const VIEW_MODE_STORAGE_KEY = "aichatdeck:conversation-list:view-mode";
 
 type ConversationListViewMode = "list" | "cards";
-
-const menuKeyClass =
-  "mx-0.5 inline-flex min-h-[18px] min-w-[18px] items-center justify-center rounded border border-zinc-200 bg-zinc-100 px-1 font-sans text-[10px] font-medium leading-none text-zinc-600 shadow-[0_1px_0_rgba(0,0,0,0.06)] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:shadow-[0_1px_0_rgba(255,255,255,0.04)]";
 
 export function ConversationList() {
   const router = useRouter();
@@ -388,9 +386,9 @@ export function ConversationList() {
               </button>
             </div>
             <p className="hidden shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400 lg:block">
-              use <kbd className={menuKeyClass}>↑</kbd> and{" "}
-              <kbd className={menuKeyClass}>↓</kbd> to navigate menu,{" "}
-              <kbd className={menuKeyClass}>→</kbd> to open.
+              use <kbd className={keyBadgeClass}>↑</kbd> and{" "}
+              <kbd className={keyBadgeClass}>↓</kbd> to navigate menu,{" "}
+              <kbd className={keyBadgeClass}>→</kbd> to open.
             </p>
           </div>
 

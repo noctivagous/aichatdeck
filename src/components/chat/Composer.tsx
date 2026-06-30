@@ -4,7 +4,7 @@ import { useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { LayoutTemplate, Paperclip, Send, Square } from "lucide-react";
 import { useKeybindings } from "@/hooks/useKeybindings";
-import { formatShortcut } from "@/lib/keybindings/match";
+import { formatShortcut, keyBadgeClass } from "@/lib/keybindings/match";
 import type { Keybinding } from "@/lib/keybindings/types";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ type ComposerProps = {
   isStreaming: boolean;
   centerNewPages: boolean;
   onCenterNewPagesChange: (enabled: boolean) => void;
+  onFocusChange?: (focused: boolean) => void;
   disabled?: boolean;
 };
 
@@ -31,6 +32,7 @@ export function Composer({
   isStreaming,
   centerNewPages,
   onCenterNewPagesChange,
+  onFocusChange,
   disabled,
 }: ComposerProps) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -111,6 +113,8 @@ export function Composer({
           value={value}
           disabled={disabled}
           placeholder="Continue on the live page…"
+          onFocus={() => onFocusChange?.(true)}
+          onBlur={() => onFocusChange?.(false)}
           onChange={(e) => {
             onChange(e.target.value);
             e.target.style.height = "auto";
@@ -168,8 +172,11 @@ export function Composer({
             onClick={onSendToNewPage}
             title={`Send this message and start it on a new page (${sendShortcut})`}
           >
-            <span className="hidden sm:inline">
-              Send to New Page [{sendShortcut}]
+            <span className="hidden items-center gap-1 sm:inline-flex">
+              Send to New Page{" "}
+              <kbd className={keyBadgeClass}>
+                {formatShortcut("alt+enter")}
+              </kbd>
             </span>
             <LayoutTemplate className="h-4 w-4" />
           </Button>

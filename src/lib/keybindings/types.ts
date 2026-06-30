@@ -7,6 +7,12 @@ export type KeyChord =
   | "arrowright"
   | "arrowup"
   | "arrowdown"
+  | "shift+arrowup"
+  | "shift+arrowdown"
+  | "pageup"
+  | "pagedown"
+  | "shift+pageup"
+  | "shift+pagedown"
   | "alt+arrowleft"
   | "alt+arrowright"
   | "alt+m";

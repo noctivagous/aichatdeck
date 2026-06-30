@@ -16,11 +16,12 @@ import type { PageView } from "@/lib/types";
 import { PageCard } from "./PageCard";
 import { Minimap } from "./Minimap";
 import { Composer } from "./Composer";
+import { ScrollShortcutHint } from "./ScrollShortcutHint";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { totalTokens } from "@/lib/tokens";
 import { slideEdgeGutter } from "@/lib/page-width";
-import { formatShortcut } from "@/lib/keybindings/match";
+import { formatShortcut, keyBadgeClass } from "@/lib/keybindings/match";
 import {
   findHeadingInSlide,
   scrollViewportToHeading,
@@ -81,6 +82,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   const restoredFocusRef = useRef(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [hoveredSlideIndex, setHoveredSlideIndex] = useState<number | null>(null);
+  const [composerFocused, setComposerFocused] = useState(false);
   const [unseenCount, setUnseenCount] = useState(0);
   const [edgeGutter, setEdgeGutter] = useState(0);
   const currentIndexRef = useRef(currentIndex);
@@ -391,6 +393,26 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
     );
   }, []);
 
+  const scrollSlideContentByPage = useCallback((direction: 1 | -1) => {
+    const index =
+      hoveredSlideIndexRef.current ?? currentIndexRef.current;
+
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+
+    const slide = wrap.querySelector<HTMLElement>(
+      `.slide[data-page-index="${index}"]`,
+    );
+    if (!slide) return;
+
+    const viewport = slide.querySelector<HTMLElement>(
+      "[data-radix-scroll-area-viewport]",
+    );
+    if (!viewport) return;
+
+    scrollSlideContent(direction * viewport.clientHeight);
+  }, [scrollSlideContent]);
+
   const chatBindings = useMemo<Keybinding[]>(
     () => [
       {
@@ -453,8 +475,52 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
         scope: "chat",
         handler: () => scrollSlideContent(80),
       },
+      {
+        id: "slide-scroll-up-shift",
+        chord: "shift+arrowup",
+        scope: "chat",
+        allowInTypingTarget: true,
+        requireTypingTarget: true,
+        handler: () => scrollSlideContent(-80),
+      },
+      {
+        id: "slide-scroll-down-shift",
+        chord: "shift+arrowdown",
+        scope: "chat",
+        allowInTypingTarget: true,
+        requireTypingTarget: true,
+        handler: () => scrollSlideContent(80),
+      },
+      {
+        id: "slide-scroll-page-up",
+        chord: "pageup",
+        scope: "chat",
+        handler: () => scrollSlideContentByPage(-1),
+      },
+      {
+        id: "slide-scroll-page-down",
+        chord: "pagedown",
+        scope: "chat",
+        handler: () => scrollSlideContentByPage(1),
+      },
+      {
+        id: "slide-scroll-page-up-shift",
+        chord: "shift+pageup",
+        scope: "chat",
+        allowInTypingTarget: true,
+        requireTypingTarget: true,
+        handler: () => scrollSlideContentByPage(-1),
+      },
+      {
+        id: "slide-scroll-page-down-shift",
+        chord: "shift+pagedown",
+        scope: "chat",
+        allowInTypingTarget: true,
+        requireTypingTarget: true,
+        handler: () => scrollSlideContentByPage(1),
+      },
     ],
-    [focusPage, pages.length, router, scrollSlideContent],
+    [focusPage, pages.length, router, scrollSlideContent, scrollSlideContentByPage],
   );
 
   useKeybindings("chat", chatBindings);
@@ -478,13 +544,13 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
                   aria-hidden
                 >
                   Press{" "}
-                  <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                  <kbd className={keyBadgeClass}>
                     {formatShortcut("arrowleft")}
-                  </span>{" "}
+                  </kbd>{" "}
                   twice or{" "}
-                  <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                  <kbd className={keyBadgeClass}>
                     {formatShortcut("alt+m")}
-                  </span>{" "}
+                  </kbd>{" "}
                   to return to the main menu.
                 </aside>
               </div>
@@ -499,6 +565,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
                 lineHeight={lineHeight}
                 isLive={hasLivePage && page.index === livePageIndex}
                 isFocused={currentIndex === page.index}
+                composerFocused={composerFocused}
                 isStreaming={isStreaming && hasLivePage && page.index === livePageIndex}
                 streamingMessageId={
                   hasLivePage && page.index === livePageIndex
@@ -572,7 +639,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
               onSelect={(index) => focusPage(index, true)}
             />
             <div className="ml-1 hidden items-center gap-1.5 border-l border-zinc-200 pl-2 text-[11px] text-zinc-500 dark:border-zinc-800 sm:flex">
-              ↑↓ to scroll page
+              <ScrollShortcutHint composerFocused={composerFocused} />
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -593,6 +660,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
             onChange={onComposerChange}
             centerNewPages={centerNewPages}
             onCenterNewPagesChange={onCenterNewPagesChange}
+            onFocusChange={setComposerFocused}
             onSend={() => {
               if (hasLivePage && !isLive) focusPage(livePageIndex, true);
               onSend();
