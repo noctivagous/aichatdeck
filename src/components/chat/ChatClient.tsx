@@ -1,17 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { UIMessage } from "ai";
 import { toast } from "sonner";
 import { ChatSession } from "./ChatSession";
 import { getConversation } from "@/lib/db";
 import type { ConversationRecord } from "@/lib/types";
+import { parseChatNavigateTarget } from "@/lib/chat-navigation";
 
 type ChatClientProps = {
   conversationId: string;
 };
 
 export function ChatClient({ conversationId }: ChatClientProps) {
+  const searchParams = useSearchParams();
+  const navigateTarget = useMemo(
+    () => parseChatNavigateTarget(searchParams),
+    [searchParams],
+  );
   const [conversation, setConversation] = useState<ConversationRecord | null>(
     null,
   );
@@ -42,7 +49,10 @@ export function ChatClient({ conversationId }: ChatClientProps) {
       initialModelId={conversation.modelId}
       initialMessages={conversation.messages as UIMessage[]}
       initialPageBreaks={conversation.pageBreaks ?? []}
-      initialFocusedPageIndex={conversation.focusedPageIndex ?? 0}
+      initialFocusedPageIndex={
+        navigateTarget?.pageIndex ?? conversation.focusedPageIndex ?? 0
+      }
+      initialNavigateTo={navigateTarget}
     />
   );
 }

@@ -13,6 +13,7 @@ import {
   type ReplyLineHeightId,
 } from "@/lib/reply-line-height";
 import { MarkdownReply } from "./MarkdownReply";
+import { AssistantMessageSlugProvider } from "./heading-slug-context";
 
 type MessageBubbleProps = {
   message: UIMessage;
@@ -34,14 +35,7 @@ export const MessageBubble = memo(function MessageBubble({
   const isUser = message.role === "user";
   const columns = clampPageColumns(columnCount);
 
-  return (
-    <div
-      className={cn(
-        "flex",
-        isUser ? "justify-end" : "justify-start",
-        animate && !streaming && "bubble",
-      )}
-    >
+  const bubble = (
       <div
         className={cn(
           "px-3.5 py-2.5",
@@ -96,6 +90,23 @@ export const MessageBubble = memo(function MessageBubble({
           return null;
         })}
       </div>
+  );
+
+  return (
+    <div
+      className={cn(
+        "flex",
+        isUser ? "justify-end" : "justify-start",
+        animate && !streaming && "bubble",
+      )}
+    >
+      {isUser ? (
+        bubble
+      ) : (
+        <AssistantMessageSlugProvider messageId={message.id}>
+          {bubble}
+        </AssistantMessageSlugProvider>
+      )}
     </div>
   );
 });

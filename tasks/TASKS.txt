@@ -1,0 +1,107 @@
+# AIChatDeck Tasks
+
+
+
+## Keyboard Navigation
+### Alt + Enter for "Send to New Page":
+  - "Send to New Page [Alt/Opt u+ Symbol + Enter]"
+### Other
+- Alt + Left and Alt + Right arrows always move the
+slides to the right and left in case the cursor is in
+the text box.
+- Down/Up arrow when mouse is moved over the slide
+will scroll it.
+- If on first slide, left arrow pressed twice
+will bring the user to the main menu, which should
+be navigable with up and down arrows and return key
+to open up a group of chat slides.
+- alt + m : main menu
+
+
+## Chat Length
+To the right of the textbox submission buttons,
+a tab control for response length [ Short | Small | Medium | Regular ]
+
+Short = 1-2 sentences
+Small = 1-2 paragraphs
+Medium = 3-5 paragraph
+Regular = determined by AI
+
+
+
+## Chat Types
+
+Features: 
+- [ ] Revise and add to app UI from one slide to the next
+  - [ ] Branch off to new chat deck inside chat
+
+
+### Chat Slide Types
+
+- [ ] During a chat, dropdown menu to the left of the chat box 
+lets the user select chat slide type; the chat session
+enters that mode for the next slide.
+
+- [ ] **Brief Responses**
+  - [ ] No more than a paragraph response
+  - [ ] Config in upper right-hand corner allows >1 paragraph
+
+- [ ] **Progressive / Iterative**
+  - [ ] Output is built up and operated on each time.  Basis for
+  different subcategories
+  Example Categories: Regular, Progressive Specs, Progressive Research,
+  Progressive Task
+
+- [ ] **Progressive Specs**
+  - [ ] Each slide lets the user add to and revise specs
+  - [ ] Conventions (e.g. Progressive Specs, Progressive Research) change the instructions sent to the AI for formatting responses and style them accordingly
+  - [ ] target: `.mmd` or `plant-uml-c4` — rendered diagram in a container with a tab for text editor
+
+- [ ] **Progressive Research**
+  - [ ] Each slide lets the user add to and revise research, one step at a time
+  - [ ] Ask questions for web search to add to it
+  - [ ] Allow going back in history and branching off or writing over the last slide
+
+- [ ] **Progressive Task**
+  - reflects agent activity in each slide, user sees output and
+  then tells agent what to do next
+
+- [ ] **Teaching** (AI Agent)
+  - Teaches a requested subject.  Does research on the web.
+  - Asks scoping questions in questionnaire format.
+  - Produces in-page quizzes, collects information, presents information
+  in graphs and charts with built-in d3.js + AI agents.
+  - User gives feedback and it adjusts.
+  - Produces worksheets for print-out.
+  
+- [ ] **Translation**
+  - [ ] Controls for switching between source and translation
+  - [ ] Side-by-side view and related layout options
+
+- [ ] Checkbox to the left of textbox: **Questionnaire / Intake Before Task**
+  - questionnaire / intake types dropdown has different questionnaire types
+  - takes information from the user, initially or periodically,
+  with agents, to carry out tasks on or with the next slide.
+
+## Chat Session View: Kanban
+
+- [ ] View entire chat session (Q&A of all slides) in kanban view
+
+## Chat Slide View
+
+- [ ] Configure chat slide layout 
+with controls at upper right
+
+
+## Chat Deck Groups
+
+- [ ] Allow grouping of chat session groups
+- [ ] Kanban view of a chat deck group
+
+
+## Branching Tracks
+
+- [ ] Break a chat session into multiple subquestions
+- [ ] Progress a chat rightward or branch downward (multiple tracks for a single slide)
+- [ ] Navigate up and down between tracks
+

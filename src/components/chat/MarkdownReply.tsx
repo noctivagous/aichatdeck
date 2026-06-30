@@ -22,6 +22,7 @@ import { segmentMarkdownForColumns } from "@/lib/markdown-column-segments";
 import { rehypeMarkdownPolish } from "@/lib/rehype-markdown-polish";
 import { rehypeTableTitles } from "@/lib/rehype-table-titles";
 import { markdownComponents } from "./markdown-components";
+import { useMessageHeadingSlugs } from "./heading-slug-context";
 import "katex/dist/katex.min.css";
 
 type MarkdownReplyProps = {
@@ -32,7 +33,45 @@ type MarkdownReplyProps = {
   streaming?: boolean;
 };
 
-const REMARK_PLUGINS = [remarkGfm, remarkMath];
+type MdNode = {
+  type?: string;
+  depth?: number;
+  data?: {
+    hProperties?: Record<string, unknown>;
+  };
+  children?: MdNode[];
+};
+
+function withHeadingSlugs(slugs: string[]) {
+  return function headingSlugPlugin() {
+    return function transform(tree: MdNode) {
+      let headingIndex = 0;
+
+      const walk = (node: MdNode) => {
+        if (node.type === "heading" && (node.depth ?? 0) >= 1 && (node.depth ?? 0) <= 3) {
+          const slug = slugs[headingIndex++];
+          if (slug) {
+            node.data = {
+              ...node.data,
+              hProperties: {
+                ...(node.data?.hProperties ?? {}),
+                id: slug,
+                "data-heading-slug": slug,
+              },
+            };
+          }
+        }
+
+        for (const child of node.children ?? []) {
+          walk(child);
+        }
+      };
+
+      walk(tree);
+    };
+  };
+}
+
 const REHYPE_PLUGINS_COMPLETE = [
   rehypeKatex,
   rehypeMarkdownPolish,
@@ -47,6 +86,11 @@ export function MarkdownReply({
   lineHeight = REPLY_LINE_HEIGHT.default,
   streaming = false,
 }: MarkdownReplyProps) {
+  const headingSlugs = useMessageHeadingSlugs();
+  const remarkPlugins = useMemo(
+    () => [remarkGfm, remarkMath, withHeadingSlugs(headingSlugs)],
+    [headingSlugs],
+  );
   const effectiveFontPx = replyFontEffectivePx(fontScale);
   const useColumns = columnCount > 1 && !streaming;
   const segments = useMemo(
@@ -77,7 +121,7 @@ export function MarkdownReply({
   const renderMarkdown = (text: string, key: string) => (
     <ReactMarkdown
       key={key}
-      remarkPlugins={REMARK_PLUGINS}
+      remarkPlugins={remarkPlugins}
       rehypePlugins={rehypePlugins}
       components={markdownComponents}
     >

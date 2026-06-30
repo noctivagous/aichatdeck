@@ -1,6 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useRouter } from "next/navigation";
+import { useKeybindings } from "@/hooks/useKeybindings";
+import type { Keybinding } from "@/lib/keybindings/types";
 import type { PageView } from "@/lib/types";
 import { PageCard } from "./PageCard";
 import { Minimap } from "./Minimap";
@@ -9,6 +20,10 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { totalTokens } from "@/lib/tokens";
 import { slideEdgeGutter } from "@/lib/page-width";
+import {
+  findHeadingInSlide,
+  scrollViewportToHeading,
+} from "@/lib/scroll-to-heading";
 import type { PageColumnCount } from "@/lib/page-columns";
 import type { ReplyFontScaleId } from "@/lib/reply-font-size";
 import type { ReplyLineHeightId } from "@/lib/reply-line-height";
@@ -33,7 +48,12 @@ type SlidesTrackProps = {
   onCenterNewPagesChange: (enabled: boolean) => void;
 };
 
-export function SlidesTrack({
+export type SlidesTrackHandle = {
+  focusPage: (index: number, headingSlug?: string) => void;
+};
+
+export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
+  function SlidesTrack({
   pages,
   pageWidth,
   columnCount,
@@ -52,12 +72,14 @@ export function SlidesTrack({
   onFocusedPageChange,
   centerNewPages,
   onCenterNewPagesChange,
-}: SlidesTrackProps) {
+}, ref) {
+  const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
   const pendingCenterNewPage = useRef(false);
   const prevPageCountRef = useRef(pages.length);
   const restoredFocusRef = useRef(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [hoveredSlideIndex, setHoveredSlideIndex] = useState<number | null>(null);
   const [unseenCount, setUnseenCount] = useState(0);
   const [edgeGutter, setEdgeGutter] = useState(0);
   const currentIndexRef = useRef(currentIndex);
@@ -65,6 +87,11 @@ export function SlidesTrack({
   const isStreamingRef = useRef(isStreaming);
   isStreamingRef.current = isStreaming;
   const programmaticFocusRef = useRef<number | null>(null);
+  const hoveredSlideIndexRef = useRef(hoveredSlideIndex);
+  hoveredSlideIndexRef.current = hoveredSlideIndex;
+  const headingScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const isSlideCentered = useCallback(
     (wrap: HTMLElement, slide: HTMLElement) => {
@@ -144,6 +171,78 @@ export function SlidesTrack({
       pages.length,
       scrollSlideToCenter,
     ],
+  );
+
+  const scrollToHeadingInSlide = useCallback(
+    (pageIndex: number, headingSlug: string) => {
+      const wrap = wrapRef.current;
+      if (!wrap) return false;
+
+      const slides = wrap.querySelectorAll<HTMLElement>(".slide");
+      const slide = slides[pageIndex];
+      if (!slide) return false;
+
+      const heading = findHeadingInSlide(slide, headingSlug);
+      if (!heading) return false;
+
+      const viewport = slide.querySelector<HTMLElement>(
+        "[data-radix-scroll-area-viewport]",
+      );
+      if (!viewport) return false;
+
+      scrollViewportToHeading(viewport, heading, "instant");
+      return true;
+    },
+    [],
+  );
+
+  const scheduleHeadingScroll = useCallback(
+    (pageIndex: number, headingSlug: string) => {
+      if (headingScrollTimerRef.current) {
+        clearTimeout(headingScrollTimerRef.current);
+        headingScrollTimerRef.current = null;
+      }
+
+      let attempts = 0;
+      const poll = () => {
+        if (scrollToHeadingInSlide(pageIndex, headingSlug)) return;
+        if (attempts++ < 80) {
+          headingScrollTimerRef.current = setTimeout(poll, 50);
+        }
+      };
+
+      requestAnimationFrame(() => requestAnimationFrame(poll));
+    },
+    [scrollToHeadingInSlide],
+  );
+
+  useEffect(
+    () => () => {
+      if (headingScrollTimerRef.current) {
+        clearTimeout(headingScrollTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const focusPageWithHeading = useCallback(
+    (index: number, headingSlug?: string) => {
+      if (headingSlug) {
+        focusPage(index, false);
+        scheduleHeadingScroll(index, headingSlug);
+        return;
+      }
+      focusPage(index, true);
+    },
+    [focusPage, scheduleHeadingScroll],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focusPage: focusPageWithHeading,
+    }),
+    [focusPageWithHeading],
   );
 
   const liveMessageCount = hasLivePage
@@ -265,24 +364,103 @@ export function SlidesTrack({
     };
   }, [isSlideCentered, onFocusedPageChange, pages.length]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        focusPage(
-          Math.min(pages.length - 1, currentIndexRef.current + 1),
-          false,
-        );
-      }
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        focusPage(Math.max(0, currentIndexRef.current - 1), false);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [focusPage, pages.length]);
+  const scrollHoveredSlide = useCallback((delta: number) => {
+    const index = hoveredSlideIndexRef.current;
+    if (index === null) return;
+
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+
+    const slide = wrap.querySelector<HTMLElement>(
+      `.slide[data-page-index="${index}"]`,
+    );
+    if (!slide) return;
+
+    const viewport = slide.querySelector<HTMLElement>(
+      "[data-radix-scroll-area-viewport]",
+    );
+    if (!viewport) return;
+
+    viewport.scrollTop = Math.max(
+      0,
+      Math.min(
+        viewport.scrollTop + delta,
+        viewport.scrollHeight - viewport.clientHeight,
+      ),
+    );
+  }, []);
+
+  const chatBindings = useMemo<Keybinding[]>(
+    () => [
+      {
+        id: "main-menu-double-left",
+        chord: "arrowleft",
+        scope: "chat",
+        sequence: "arrowleft",
+        when: () => currentIndexRef.current === 0,
+        handler: () => router.push("/"),
+      },
+      {
+        id: "slide-prev",
+        chord: "arrowleft",
+        scope: "chat",
+        handler: () => {
+          focusPage(Math.max(0, currentIndexRef.current - 1), false);
+        },
+      },
+      {
+        id: "slide-next",
+        chord: "arrowright",
+        scope: "chat",
+        handler: () => {
+          focusPage(
+            Math.min(pages.length - 1, currentIndexRef.current + 1),
+            false,
+          );
+        },
+      },
+      {
+        id: "slide-prev-alt",
+        chord: "alt+arrowleft",
+        scope: "chat",
+        allowInTypingTarget: true,
+        handler: () => {
+          focusPage(Math.max(0, currentIndexRef.current - 1), false);
+        },
+      },
+      {
+        id: "slide-next-alt",
+        chord: "alt+arrowright",
+        scope: "chat",
+        allowInTypingTarget: true,
+        handler: () => {
+          focusPage(
+            Math.min(pages.length - 1, currentIndexRef.current + 1),
+            false,
+          );
+        },
+      },
+      {
+        id: "slide-scroll-up",
+        chord: "arrowup",
+        scope: "chat",
+        allowInTypingTarget: true,
+        when: () => hoveredSlideIndexRef.current !== null,
+        handler: () => scrollHoveredSlide(-80),
+      },
+      {
+        id: "slide-scroll-down",
+        chord: "arrowdown",
+        scope: "chat",
+        allowInTypingTarget: true,
+        when: () => hoveredSlideIndexRef.current !== null,
+        handler: () => scrollHoveredSlide(80),
+      },
+    ],
+    [focusPage, pages.length, router, scrollHoveredSlide],
+  );
+
+  useKeybindings("chat", chatBindings);
 
   const allMessages = pages.flatMap((page) => page.messages);
   const tokenTotal = totalTokens(allMessages);
@@ -313,6 +491,12 @@ export function SlidesTrack({
                     : undefined
                 }
                 onFocus={() => focusPage(page.index, true)}
+                onHoverStart={() => setHoveredSlideIndex(page.index)}
+                onHoverEnd={() =>
+                  setHoveredSlideIndex((current) =>
+                    current === page.index ? null : current,
+                  )
+                }
               />
             ))}
             <div className="shrink-0" style={{ width: edgeGutter }} aria-hidden />
@@ -373,7 +557,7 @@ export function SlidesTrack({
               onSelect={(index) => focusPage(index, true)}
             />
             <div className="ml-1 hidden items-center gap-1.5 border-l border-zinc-200 pl-2 text-[11px] text-zinc-500 dark:border-zinc-800 sm:flex">
-              flick to review — no vertical scroll
+              hover a slide, ↑↓ to scroll
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -411,4 +595,6 @@ export function SlidesTrack({
       </footer>
     </>
   );
-}
+});
+
+SlidesTrack.displayName = "SlidesTrack";

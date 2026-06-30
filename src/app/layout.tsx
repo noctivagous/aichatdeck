@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans, Inter, Source_Serif_4 } from "next/font/google";
 import { Toaster } from "sonner";
-import { ThemeProvider } from "@/components/theme-provider";
+import { AppProviders } from "@/components/AppProviders";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -31,10 +31,10 @@ export default function RootLayout({
       <body
         className={`${inter.className} ${replySerif.variable} ${replySans.variable} bg-[#FAFAFB] text-zinc-900 antialiased dark:bg-[#0A0A0C] dark:text-zinc-100`}
       >
-        <ThemeProvider>
+        <AppProviders>
           {children}
           <Toaster position="bottom-center" richColors />
-        </ThemeProvider>
+        </AppProviders>
       </body>
     </html>
   );

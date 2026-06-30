@@ -1,8 +1,11 @@
 "use client";
 
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { LayoutTemplate, Paperclip, Send, Square } from "lucide-react";
+import { useKeybindings } from "@/hooks/useKeybindings";
+import { formatShortcut } from "@/lib/keybindings/match";
+import type { Keybinding } from "@/lib/keybindings/types";
 
 type ComposerProps = {
   value: string;
@@ -30,13 +33,33 @@ export function Composer({
   disabled,
 }: ComposerProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const sendShortcut = formatShortcut("alt+enter");
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (!isStreaming) onSend();
-    }
-  };
+  const bindings = useMemo<Keybinding[]>(
+    () => [
+      {
+        id: "send",
+        chord: "enter",
+        scope: "composer",
+        requireTypingTarget: true,
+        handler: () => {
+          if (!isStreaming) onSend();
+        },
+      },
+      {
+        id: "send-to-new-page",
+        chord: "alt+enter",
+        scope: "composer",
+        requireTypingTarget: true,
+        handler: () => {
+          if (!isStreaming && onSendToNewPage) onSendToNewPage();
+        },
+      },
+    ],
+    [isStreaming, onSend, onSendToNewPage],
+  );
+
+  useKeybindings("composer", bindings);
 
   return (
     <div className="mx-auto flex max-w-[900px] items-end gap-2.5">
@@ -67,7 +90,6 @@ export function Composer({
             e.target.style.height = "auto";
             e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
           }}
-          onKeyDown={handleKeyDown}
           className="w-full max-h-[140px] resize-none rounded-[16px] border border-zinc-200/70 bg-zinc-100 px-4 py-3 pr-11 text-[14px] leading-[1.4] placeholder-zinc-500 transition focus:border-blue-500/40 focus:outline-none focus:ring-2 focus:ring-blue-500/25 dark:border-zinc-800 dark:bg-zinc-900"
         />
         <input
@@ -118,9 +140,11 @@ export function Composer({
             disabled={disabled || !value.trim()}
             className="h-[46px] shrink-0 rounded-[14px] px-3.5"
             onClick={onSendToNewPage}
-            title="Send this message and start it on a new page"
+            title={`Send this message and start it on a new page (${sendShortcut})`}
           >
-            <span className="hidden sm:inline">Send to New Page</span>
+            <span className="hidden sm:inline">
+              Send to New Page [{sendShortcut}]
+            </span>
             <LayoutTemplate className="h-4 w-4" />
           </Button>
         </>

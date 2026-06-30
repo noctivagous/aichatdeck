@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { ChatClient } from "@/components/chat/ChatClient";
 
 type ChatPageProps = {
@@ -6,5 +7,15 @@ type ChatPageProps = {
 
 export default async function ChatPage({ params }: ChatPageProps) {
   const { id } = await params;
-  return <ChatClient conversationId={id} />;
+  return (
+    <Suspense
+      fallback={
+        <div className="grid h-[100dvh] place-items-center text-sm text-zinc-500">
+          Loading conversation…
+        </div>
+      }
+    >
+      <ChatClient conversationId={id} />
+    </Suspense>
+  );
 }

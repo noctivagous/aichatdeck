@@ -9,6 +9,7 @@ import type { PageColumnCount } from "@/lib/page-columns";
 import type { ReplyFontScaleId } from "@/lib/reply-font-size";
 import type { ReplyLineHeightId } from "@/lib/reply-line-height";
 import { messageText } from "@/lib/tokens";
+import { PageSlugPlanProvider } from "./heading-slug-context";
 
 type PageCardProps = {
   page: PageView;
@@ -21,6 +22,8 @@ type PageCardProps = {
   fontScale: ReplyFontScaleId;
   lineHeight: ReplyLineHeightId;
   onFocus?: () => void;
+  onHoverStart?: () => void;
+  onHoverEnd?: () => void;
 };
 
 export const PageCard = memo(function PageCard({
@@ -34,6 +37,8 @@ export const PageCard = memo(function PageCard({
   fontScale,
   lineHeight,
   onFocus,
+  onHoverStart,
+  onHoverEnd,
 }: PageCardProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const pinnedToBottomRef = useRef(true);
@@ -92,6 +97,9 @@ export const PageCard = memo(function PageCard({
         isFocused && "snap-always",
       )}
       style={{ width: `${widthPx}px` }}
+      data-page-index={page.index}
+      onMouseEnter={onHoverStart}
+      onMouseLeave={onHoverEnd}
       onClick={onFocus}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -152,6 +160,7 @@ export const PageCard = memo(function PageCard({
 
         <div className="relative min-h-0 flex-1 px-4 pb-5 pt-4 md:px-5">
           <ScrollArea ref={scrollAreaRef} className="h-full min-h-0">
+            <PageSlugPlanProvider page={page}>
             <div className="space-y-3.5 pr-3">
               {page.messages.map((msg) => (
                 <MessageBubble
@@ -178,6 +187,7 @@ export const PageCard = memo(function PageCard({
                 </div>
               ) : null}
             </div>
+            </PageSlugPlanProvider>
           </ScrollArea>
           <div className="pointer-events-none absolute bottom-0 left-0 right-3 h-8 bg-gradient-to-t from-white to-transparent dark:from-zinc-900" />
         </div>

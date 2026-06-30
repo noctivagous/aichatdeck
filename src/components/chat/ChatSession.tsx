@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import Link from "next/link";
 import { Settings, ArrowLeft, Download, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { SlidesTrack } from "./SlidesTrack";
+import { SlidesTrack, type SlidesTrackHandle } from "./SlidesTrack";
+import { SessionOutlineSidebar } from "./SessionOutlineSidebar";
+import { SessionOutlineToggle } from "./SessionOutlineToggle";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -35,6 +38,9 @@ import { usePageColumns } from "@/hooks/usePageColumns";
 import { useReplyFontSize } from "@/hooks/useReplyFontSize";
 import { useReplyLineHeight } from "@/hooks/useReplyLineHeight";
 import { useCenterNewPages } from "@/hooks/useCenterNewPages";
+import { useSessionOutlineSidebar } from "@/hooks/useSessionOutlineSidebar";
+import { buildSessionOutline } from "@/lib/session-outline";
+import type { ChatNavigateTarget } from "@/lib/chat-navigation";
 import { PageWidthSlider } from "./PageWidthSlider";
 import { PageColumnsControl } from "./PageColumnsControl";
 import { ReplyFontSizeControl } from "./ReplyFontSizeControl";
@@ -46,6 +52,7 @@ type ChatSessionProps = {
   initialMessages: UIMessage[];
   initialPageBreaks?: number[];
   initialFocusedPageIndex?: number;
+  initialNavigateTo?: ChatNavigateTarget | null;
 };
 
 export function ChatSession({
@@ -55,13 +62,18 @@ export function ChatSession({
   initialMessages,
   initialPageBreaks = [],
   initialFocusedPageIndex = 0,
+  initialNavigateTo = null,
 }: ChatSessionProps) {
+  const router = useRouter();
   const { settings, hydrated, reload } = useHydratedSettings();
   const { pageWidth, setPreviewWidth, commitWidth } = usePageWidth();
   const { columnCount, setColumns } = usePageColumns();
   const { fontScale, setReplyFontScale } = useReplyFontSize();
   const { lineHeight } = useReplyLineHeight();
   const { centerNewPages, setCenterNewPagesEnabled } = useCenterNewPages();
+  const { sidebarOpen, toggleSidebar } = useSessionOutlineSidebar();
+  const slidesTrackRef = useRef<SlidesTrackHandle>(null);
+  const navigateHandledRef = useRef(false);
   const [modelId, setModelId] = useState(initialModelId);
   const [input, setInput] = useState("");
   const [title, setTitle] = useState(initialTitle);
@@ -99,6 +111,10 @@ export function ChatSession({
   const pages = useMemo(
     () => computePages(messages, pageBreaks),
     [messages, pageBreaks],
+  );
+  const outline = useMemo(
+    () => buildSessionOutline(title, pages),
+    [title, pages],
   );
   const isStreaming = status === "streaming" || status === "submitted";
   const canStartNewPage = liveMessageCount(messages, pageBreaks) > 0;
@@ -267,6 +283,43 @@ export function ChatSession({
     [input, isStreaming, ensureProviderReady, sendMessage],
   );
 
+  const handleOutlineSelectPage = useCallback(
+    (index: number, headingSlug?: string) => {
+      slidesTrackRef.current?.focusPage(index, headingSlug);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!initialNavigateTo || navigateHandledRef.current) return;
+    if (pages.length === 0) return;
+
+    navigateHandledRef.current = true;
+    const clamped = Math.min(
+      Math.max(0, initialNavigateTo.pageIndex),
+      pages.length - 1,
+    );
+
+    const run = (attempts = 0) => {
+      if (slidesTrackRef.current) {
+        slidesTrackRef.current.focusPage(
+          clamped,
+          initialNavigateTo.headingSlug,
+        );
+        router.replace(`/chat/${conversationId}`, { scroll: false });
+        return;
+      }
+      if (attempts < 30) requestAnimationFrame(() => run(attempts + 1));
+    };
+
+    requestAnimationFrame(() => run());
+  }, [
+    conversationId,
+    initialNavigateTo,
+    pages.length,
+    router,
+  ]);
+
   const handleExport = () => {
     const blob = new Blob(
       [JSON.stringify({ title, modelId, messages }, null, 2)],
@@ -282,7 +335,18 @@ export function ChatSession({
   };
 
   return (
-    <div className="flex h-[100dvh] flex-col">
+    <div className="flex h-[100dvh]">
+      {sidebarOpen ? (
+        <SessionOutlineSidebar
+          mode="interactive"
+          outline={outline}
+          activePageIndex={focusedPageIndex}
+          onSelectPage={handleOutlineSelectPage}
+          className="hidden lg:flex"
+        />
+      ) : null}
+
+      <div className="flex min-w-0 flex-1 flex-col">
       <header className="z-40 flex h-[60px] shrink-0 items-center gap-3 border-b border-zinc-200/70 bg-white/80 px-4 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/70 md:px-6">
         <Button variant="ghost" size="icon" asChild>
           <Link href="/" aria-label="Back to conversations">
@@ -305,6 +369,7 @@ export function ChatSession({
         </div>
 
         <div className="mx-auto flex items-center gap-2">
+          <SessionOutlineToggle open={sidebarOpen} onToggle={toggleSidebar} />
           {availableModels.length > 0 ? (
             <Select
               value={modelId}
@@ -378,6 +443,7 @@ export function ChatSession({
       </header>
 
       <SlidesTrack
+        ref={slidesTrackRef}
         pages={pages}
         pageWidth={pageWidth}
         columnCount={columnCount}
@@ -396,6 +462,7 @@ export function ChatSession({
         centerNewPages={centerNewPages}
         onCenterNewPagesChange={setCenterNewPagesEnabled}
       />
+      </div>
     </div>
   );
 }

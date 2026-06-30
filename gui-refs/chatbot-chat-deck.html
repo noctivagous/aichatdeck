@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Deck — Horizontal AI Chat</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config = { darkMode: 'class' }</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+  * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+  .deck-scroller { scrollbar-width: none; -ms-overflow-style: none; }
+  .deck-scroller::-webkit-scrollbar { display: none; }
+  .messages { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,.2) transparent; }
+  .messages::-webkit-scrollbar { width: 5px; }
+  .messages::-webkit-scrollbar-thumb { background: rgba(0,0,0,.15); border-radius: 10px; }
+  .dark .messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); }
+  .bubble { animation: bubbleIn .32s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes bubbleIn { from { opacity:0; transform: translateY(6px) scale(.985)} to {opacity:1; transform:none} }
+  .chip { font-size: 11px; padding: 4px 8px; border-radius: 8px; background: rgba(0,0,0,.05); color: #52525b; transition: all .15s; }
+  .chip:hover { background: rgba(0,0,0,.08); }
+  .dark .chip { background: rgba(255,255,255,.08); color: #d4d4d8; }
+  .dark .chip:hover { background: rgba(255,255,255,.12); }
+  .typing span { display:inline-block; width:4px; height:4px; background: currentColor; border-radius: 50%; margin:0 1px; animation: bounce 1.2s infinite; opacity:.7 }
+  .typing span:nth-child(2){ animation-delay:.15s } .typing span:nth-child(3){ animation-delay:.3s }
+  @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-4px)} }
+  .deck-card { transition: transform .25s ease, box-shadow .25s ease; }
+  .deck-card:hover { transform: translateY(-2px); }
+  .snap-center { scroll-margin: 0 40px; }
+  @media (max-width: 768px) {
+    .deck-scroller { flex-direction: column !important; overflow-x: hidden !important; overflow-y: auto !important; scroll-snap-type: none !important; padding: 16px !important; gap: 16px !important; }
+    .deck-card { width: 100% !important; min-width: 0 !important; height: auto !important; min-height: 520px; scroll-snap-align: none !important; }
+  }
+</style>
+</head>
+<body class="bg-[#FAFAFB] dark:bg-[#070708] text-zinc-900 dark:text-zinc-100 overflow-hidden select-none">
+<div id="app" class="h-[100dvh] flex flex-col">
+
+  <!-- Top Bar -->
+  <header class="h-[64px] shrink-0 flex items-center gap-3 px-4 md:px-6 border-b border-zinc-200/70 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-40">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-[0_4px_14px_-3px_rgba(99,102,241,0.5)]">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M8 12h8M8 16h5M8 8h3M4 20V4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-8l-4 4v-4H6a2 2 0 0 1-2-2z"/></svg>
+      </div>
+      <div class="min-w-0">
+        <h1 class="text-[17px] font-semibold leading-none tracking-tight">Chat Deck</h1>
+        <p class="text-[11px] text-zinc-500 dark:text-zinc-400 -mt-0.5 hidden sm:block">horizontal, not endless</p>
+      </div>
+      <span class="hidden sm:inline-flex ml-1 px-1.5 py-0.5 text-[10px] font-medium rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">BETA</span>
+    </div>
+
+    <div class="hidden md:flex flex-1 max-w-[420px] mx-4 lg:mx-8">
+      <div class="relative w-full">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3"/></svg>
+        <input id="search" placeholder="Search decks… ⌘K" class="w-full h-9 pl-9 pr-3 rounded-xl bg-zinc-100/80 dark:bg-zinc-800/80 border border-zinc-200/50 dark:border-zinc-700/50 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 text-[14px] transition">
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 ml-auto">
+      <button id="newDeckBtn" class="h-9 px-3.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[13px] font-medium hover:opacity-90 active:opacity-80 flex items-center gap-1.5 shadow-sm shrink-0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <span class="hidden sm:inline">New Deck</span>
+      </button>
+      <button id="themeToggle" class="w-9 h-9 grid place-items-center rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition shrink-0" aria-label="Toggle theme">
+        <svg class="w-[18px] h-[18px] dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/></svg>
+        <svg class="w-[18px] h-[18px] hidden dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 shadow-inner shrink-0"></div>
+    </div>
+  </header>
+
+  <!-- Main Deck Area -->
+  <main class="flex-1 relative min-h-0">
+    <div id="deckContainer" class="deck-scroller absolute inset-0 flex gap-5 md:gap-6 px-4 md:px-10 py-6 md:py-8 overflow-x-auto snap-x snap-mandatory">
+      <!-- Decks injected here -->
+    </div>
+
+    <!-- Left/Right Nav (desktop) -->
+    <button id="navLeft" class="hidden lg:grid absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 place-items-center rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur border border-zinc-200/50 dark:border-zinc-800 shadow-lg hover:scale-105 transition z-30">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+    </button>
+    <button id="navRight" class="hidden lg:grid absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 place-items-center rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur border border-zinc-200/50 dark:border-zinc-800 shadow-lg hover:scale-105 transition z-30">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+    </button>
+  </main>
+
+  <!-- Bottom Bar -->
+  <footer class="h-[52px] shrink-0 flex items-center justify-between px-4 md:px-6 border-t border-zinc-200/60 dark:border-zinc-800 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl">
+    <div id="minimap" class="flex items-center gap-1.5"></div>
+    <div class="hidden md:flex items-center gap-2.5 text-[12px] text-zinc-500 dark:text-zinc-400">
+      <span class="hidden lg:inline">Swipe or ← →</span>
+      <span class="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700"></span>
+      <span>Tab for overview</span>
+      <span class="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700 hidden xl:inline"></span>
+      <span class="hidden xl:inline">Drag to reorder</span>
+    </div>
+    <div class="text-[12px] text-zinc-500 dark:text-zinc-400"><span id="deckCount">0</span> decks • no scroll fatigue</div>
+  </footer>
+</div>
+
+<!-- Overview Mode -->
+<div id="overview" class="fixed inset-0 z-[100] bg-zinc-950/90 backdrop-blur-2xl hidden opacity-0 transition-opacity duration-200">
+  <div class="h-full flex flex-col">
+    <div class="flex items-center justify-between p-6 md:p-8">
+      <div>
+        <h2 class="text-white text-[22px] font-semibold tracking-tight">Deck Overview</h2>
+        <p class="text-zinc-400 text-[13px] mt-0.5">All conversations at a glance — like a kanban for chat</p>
+      </div>
+      <button id="closeOverview" class="h-9 px-3 rounded-lg bg-white/10 hover:bg-white/15 text-white text-[13px] transition">Close (Tab)</button>
+    </div>
+    <div id="overviewGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-6 md:px-8 pb-10 overflow-auto"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-[72px] left-1/2 -translate-x-1/2 z-[200] pointer-events-none opacity-0 transition-all duration-300 translate-y-2">
+  <div class="px-3.5 py-2 rounded-xl bg-zinc-900 text-white text-[13px] shadow-2xl flex items-center gap-2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-emerald-400"><path d="M20 6 9 17l-5-5"/></svg>
+    <span id="toastText">Saved</span>
+  </div>
+</div>
+
+<script>
+const escapeHtml = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+const initialDecks = [
+  {
+    id:'tokyo-1', group:'tokyo', title:'Planning Tokyo trip', part:1, avatar:'🗼',
+    color:'from-pink-500 to-rose-500',
+    summary:'5-day food & temple itinerary for April cherry blossoms',
+    timestamp:'2h ago',
+    messages:[
+      {role:'user', text:'Help me plan a 5 day Tokyo trip in early April'},
+      {role:'ai', text:'Perfect timing for cherry blossoms! I’ll build a relaxed 5-day mix of food, temples, and neighborhoods. What’s your budget vibe?'},
+      {role:'user', text:'Relaxed, I love food and temples, around $3k'},
+      {role:'ai', text:'Got it. Day 1: Asakusa & Senso-ji temple, Nakamise street food. Day 2: Meiji Shrine + Harajuku. Day 3: Tsukiji outer market + Ginza. I’ll keep walking < 12k steps/day.'},
+      {role:'user', text:'Can we add a Hakone day trip?'},
+      {role:'ai', text:'Yes — let’s make Day 4 Hakone for onsen & Mt. Fuji views. Private onsen, ropeway, return by Shinkansen. Still under budget.'},
+    ]
+  },
+  {
+    id:'tokyo-2', group:'tokyo', title:'Planning Tokyo trip', part:2, avatar:'🗼',
+    color:'from-pink-500 to-rose-500',
+    summary:'Hotels & Hakone logistics',
+    timestamp:'1h ago',
+    context:'Continued from Part 1 • remembered: relaxed pace, food focus, $3k budget, Hakone day 4',
+    messages:[
+      {role:'user', text:'Where should I stay? Shinjuku or Asakusa?'},
+      {role:'ai', text:'Split it: 3 nights Asakusa (quiet, temple mornings) + 2 nights Shinjuku (food + nightlife). Best of both, 10 min by metro.'},
+      {role:'user', text:'Find a ryokan in Hakone under $250'},
+      {role:'ai', text:'Top pick: Hakone Yutowa — private onsen, kaiseki dinner, ~$230/night. I added it to Part 3 checklist.'},
+    ]
+  },
+  {
+    id:'tokyo-3', group:'tokyo', title:'Planning Tokyo trip', part:3, avatar:'🗼',
+    color:'from-pink-500 to-rose-500',
+    summary:'Booking checklist created',
+    timestamp:'45m ago',
+    context:'Continued from Part 2 • remembered: Yutowa, Asakusa/Shinjuku split',
+    messages:[
+      {role:'ai', text:'Booking checklist: 1) Flight HND 2) Asakusa hotel 3/28-31 3) Shinjuku 3/31-4/2 4) Hakone Yutowa 4/1. Want me to branch this into a packing list?'},
+      {role:'user', text:'Yes branch it'},
+      {role:'ai', text:'Branched to new deck "Tokyo Packing" — I kept your food tour and temple preferences.'},
+    ]
+  },
+  {
+    id:'python', group:'python', title:'Python debugging help', part:1, avatar:'🐍',
+    color:'from-emerald-500 to-teal-500',
+    summary:'Fixing pandas merge KeyError',
+    timestamp:'5h ago',
+    messages:[
+      {role:'user', text:'My pandas merge throws KeyError: "user_id" even though column exists'},
+      {role:'ai', text:'Classic whitespace or dtype issue. Try:', code:'df["user_id"] = df["user_id"].astype(str).str.strip()\nmerged = left.merge(right, on="user_id", how="left")'},
+      {role:'user', text:'Still errors. dtypes are object and int64'},
+      {role:'ai', text:'There it is — coerce both to string first. Also strip headers:', code:"left.columns = left.columns.str.strip()\nright['user_id'] = right['user_id'].astype(str)\nmerged = left.merge(right, on='user_id')"},
+    ]
+  },
+  {
+    id:'recipes', group:'recipes', title:'Dinner recipes', part:1, avatar:'🍳',
+    color:'from-amber-500 to-orange-500',
+    summary:'Quick 20-min high-protein meals',
+    timestamp:'yesterday',
+    messages:[
+      {role:'user', text:'I need 3 quick dinners, 20 mins, high protein'},
+      {role:'ai', text:'Here are 3 perfect for weeknights:', images:[
+        {title:'Miso Salmon Bowl', time:'18 min', img:'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=600&q=80'},
+        {title:'Crispy Tofu Stir-Fry', time:'20 min', img:'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&q=80'},
+        {title:'Turkey Lettuce Wraps', time:'15 min', img:'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=600&q=80'},
+      ]},
+      {role:'user', text:'Save the salmon one'},
+      {role:'ai', text:'Saved to your Recipe deck. Want a grocery list for all three?'},
+    ]
+  },
+  {
+    id:'books', group:'books', title:'Book club picks', part:1, avatar:'📚',
+    color:'from-violet-500 to-indigo-500',
+    summary:'Sci-fi with strong characters, <350 pages',
+    timestamp:'3d ago',
+    messages:[
+      {role:'user', text:'Recommend sci-fi for book club, strong characters, under 350 pages'},
+      {role:'ai', text:'Top 3 picks:', books:[
+        {title:'Klara and the Sun', author:'Kazuo Ishiguro', rating:4, note:'Beautiful AI POV, great for discussion'},
+        {title:'The Long Way to a Small, Angry Planet', author:'Becky Chambers', rating:5, note:'Cozy, character-driven'},
+        {title:'Story of Your Life', author:'Ted Chiang', rating:5, note:'Short, mind-bending'},
+      ]},
+      {role:'user', text:'We picked Klara'},
+      {role:'ai', text:'Excellent. I made a 5-question discussion guide about memory and love. Want me to add it?'},
+    ]
+  },
+];
+
+let decks = JSON.parse(JSON.stringify(initialDecks));
+const deckContainer = document.getElementById('deckContainer');
+const minimap = document.getElementById('minimap');
+const deckCount = document.getElementById('deckCount');
+
+function renderImages(images){
+  return `<div class="grid grid-cols-3 gap-2 mt-2.5">${images.map(im=>`
+    <div class="relative overflow-hidden rounded-xl bg-zinc-900 group/img cursor-pointer">
+      <img src="${im.img}" alt="" class="w-full h-[84px] object-cover opacity-90 group-hover/img:scale-105 transition duration-300">
+      <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+      <div class="absolute bottom-1.5 left-1.5 right-1.5">
+        <p class="text-[11px] font-medium text-white leading-tight">${im.title}</p>
+        <p class="text-[10px] text-white/70">${im.time}</p>
+      </div>
+    </div>`).join('')}</div>`;
+}
+function renderBooks(books){
+  return `<div class="space-y-2 mt-2.5">${books.map(b=>`
+    <div class="flex gap-2.5 p-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/60 dark:border-zinc-700/50">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 grid place-items-center text-white text-[14px] shrink-0">✦</div>
+      <div class="min-w-0 flex-1">
+        <p class="text-[13px] font-medium leading-snug truncate">${b.title}</p>
+        <p class="text-[11px] text-zinc-500 dark:text-zinc-400">${b.author}</p>
+        <div class="flex items-center gap-1 mt-1">
+          <div class="flex text-amber-500 text-[12px]">${'★'.repeat(b.rating)}<span class="text-zinc-300 dark:text-zinc-600">${'★'.repeat(5-b.rating)}</span></div>
+          <span class="text-[10px] text-zinc-500 ml-1 truncate">${b.note}</span>
+        </div>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+function createDeckElement(deck){
+  const el = document.createElement('article');
+  el.className = 'deck-card group relative snap-center shrink-0 w-[360px] xs:w-[380px] sm:w-[400px] h-[min(720px,calc(100vh-168px))] flex flex-col rounded-[28px] bg-white dark:bg-zinc-900 shadow-[0_10px_40px_-18px_rgba(0,0,0,0.25)] border border-zinc-200/60 dark:border-zinc-800/80 overflow-hidden';
+  el.dataset.id = deck.id;
+  el.dataset.group = deck.group;
+  
+  const lastMsg = deck.messages[deck.messages.length-1]?.text || 'New conversation';
+  
+  el.innerHTML = `
+    <div class="absolute -top-8 left-1/2 -translate-x-1/2 z-20 pointer-events-none opacity-0 group-hover:opacity-100 group-hover:-translate-y-1 transition-all duration-200">
+      <div class="px-2.5 py-1 rounded-lg bg-zinc-900 text-white text-[11px] shadow-xl whitespace-nowrap max-w-[260px] truncate">Last: ${escapeHtml(lastMsg)}</div>
+    </div>
+    
+    <div class="flex items-start gap-3 px-4 pt-4 pb-3 shrink-0">
+      <div class="w-10 h-10 rounded-2xl bg-gradient-to-br ${deck.color} flex items-center justify-center text-[18px] shadow-md shadow-black/5 shrink-0">${deck.avatar}</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-1.5">
+          <h3 class="font-semibold text-[15px] leading-tight truncate">${deck.title}</h3>
+          ${deck.part>1?`<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-900/5 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 font-medium">Part ${deck.part}</span>`:''}
+        </div>
+        <div class="flex items-center gap-1 mt-1">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-violet-500 shrink-0"><path d="M12 3l1.9 3.9 4.3.6-3.1 3 1 4.4-3.8-2-3.8 2 1-4.4-3.1-3 4.3-.6z"/></svg>
+          <p class="text-[12px] text-zinc-500 dark:text-zinc-400 truncate">${deck.summary}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <span class="text-[11px] text-zinc-400 hidden sm:block">${deck.timestamp}</span>
+        <button class="more-btn w-7 h-7 grid place-items-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition" aria-label="More">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+        </button>
+        <div class="more-menu absolute right-3 top-12 w-40 rounded-xl bg-white dark:bg-zinc-800 shadow-xl border border-zinc-200/70 dark:border-zinc-700 p-1 z-50 hidden">
+          <button data-action="pin" class="w-full text-left px-2.5 py-1.5 text-[13px] rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700">📌 Pin</button>
+          <button data-action="share" class="w-full text-left px-2.5 py-1.5 text-[13px] rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700">↗ Share</button>
+          <button data-action="archive" class="w-full text-left px-2.5 py-1.5 text-[13px] rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700">Archive</button>
+          <button data-action="delete" class="w-full text-left px-2.5 py-1.5 text-[13px] rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 text-red-600 dark:text-red-400">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    ${deck.context?`<div class="mx-4 mb-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-1.5 shrink-0"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 7l-10 10M7 7h10v10"/></svg><span class="truncate">${deck.context}</span></div>`:''}
+
+    <div class="messages flex-1 overflow-y-auto px-4 pb-4 space-y-4 overscroll-contain" id="messages-${deck.id}"></div>
+
+    <div class="p-3 border-t border-zinc-200/60 dark:border-zinc-800 bg-gradient-to-t from-white dark:from-zinc-900 to-transparent shrink-0">
+      <div class="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800/80 rounded-2xl px-3 py-2 border border-transparent focus-within:border-violet-500/50 focus-within:ring-2 focus-within:ring-violet-500/20 transition">
+        <input data-deck="${deck.id}" placeholder="Continue thread…" class="flex-1 bg-transparent outline-none text-[14px] placeholder-zinc-500 py-1">
+        <button class="send-btn w-7 h-7 grid place-items-center rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 active:scale-95 transition shrink-0">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        </button>
+      </div>
+    </div>
+  `;
+  
+  deckContainer.appendChild(el);
+  
+  const messagesEl = el.querySelector(`#messages-${deck.id}`);
+  deck.messages.forEach(m => appendMessage(deck.id, m, false));
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  
+  // events
+  const input = el.querySelector('input');
+  const sendBtn = el.querySelector('.send-btn');
+  const handleSend = () => {
+    const text = input.value.trim();
+    if(!text) return;
+    input.value = '';
+    handleUserMessage(deck.id, text);
+  };
+  input.addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); handleSend(); }});
+  sendBtn.addEventListener('click', handleSend);
+  
+  const moreBtn = el.querySelector('.more-btn');
+  const moreMenu = el.querySelector('.more-menu');
+  moreBtn.addEventListener('click', (e) => { e.stopPropagation(); document.querySelectorAll('.more-menu').forEach(m=>m!==moreMenu&&m.classList.add('hidden')); moreMenu.classList.toggle('hidden'); });
+  moreMenu.addEventListener('click', (e) => {
+    const action = e.target.dataset.action;
+    if(!action) return;
+    moreMenu.classList.add('hidden');
+    if(action==='delete'){ decks = decks.filter(d=>d.id!==deck.id); el.remove(); updateMinimap(); showToast('Deck deleted'); }
+    if(action==='pin'){ decks = [deck, ...decks.filter(d=>d.id!==deck.id)]; renderAll(); showToast('Pinned to front'); }
+    if(action==='share'){ showToast('Link copied'); }
+    if(action==='archive'){ showToast('Archived'); }
+  });
+  
+  return el;
+}
+
+function appendMessage(deckId, msg, animate=true){
+  const messagesEl = document.getElementById(`messages-${deckId}`);
+  if(!messagesEl) return;
+  const wrap = document.createElement('div');
+  wrap.className = `flex ${msg.role==='user'?'justify-end':'justify-start'} group/message`;
+  const isUser = msg.role==='user';
+  
+  wrap.innerHTML = `
+    <div class="max-w-[86%]">
+      <div class="${isUser 
+        ? 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white rounded-[20px] rounded-br-[6px] shadow-[0_4px_16px_-4px_rgba(99,102,241,0.4)]' 
+        : 'bg-zinc-50 dark:bg-zinc-800 border border-zinc-200/70 dark:border-zinc-700/60 rounded-[20px] rounded-bl-[6px]'} px-3.5 py-2.5 bubble">
+        ${msg.text?`<p class="text-[14px] leading-[1.5] whitespace-pre-wrap">${escapeHtml(msg.text)}</p>`:''}
+        ${msg.code?`<pre class="mt-2.5 p-2.5 bg-zinc-950 text-zinc-100 rounded-xl overflow-x-auto text-[12px] leading-[1.5] font-[JetBrains_Mono]"><code>${escapeHtml(msg.code)}</code></pre>`:''}
+        ${msg.images?renderImages(msg.images):''}
+        ${msg.books?renderBooks(msg.books):''}
+      </div>
+      ${!isUser?`<div class="flex gap-1 mt-1.5 ml-1 opacity-0 group-hover/message:opacity-100 transition">
+        <button class="chip" data-act="copy">Copy</button>
+        <button class="chip" data-act="regen">Regenerate</button>
+        <button class="chip" data-act="branch">Branch</button>
+        <button class="chip" data-act="save">Save</button>
+      </div>`:''}
+    </div>
+  `;
+  messagesEl.appendChild(wrap);
+  if(animate) messagesEl.scrollTop = messagesEl.scrollHeight + 200;
+  
+  // quick actions
+  wrap.querySelectorAll('[data-act]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const act = btn.dataset.act;
+      if(act==='copy'){ navigator.clipboard.writeText(msg.text || msg.code || ''); showToast('Copied'); }
+      if(act==='regen'){ wrap.querySelector('p').textContent = (msg.text||'') + ' (regenerated)'; showToast('Regenerated'); }
+      if(act==='branch'){ createBranch(deckId); }
+      if(act==='save'){ showToast('Saved to library'); }
+    });
+  });
+}
+
+function handleUserMessage(deckId, text){
+  const deck = decks.find(d=>d.id===deckId);
+  if(!deck) return;
+  const userMsg = {role:'user', text};
+  deck.messages.push(userMsg);
+  appendMessage(deckId, userMsg);
+  
+  // typing
+  const messagesEl = document.getElementById(`messages-${deckId}`);
+  const typing = document.createElement('div');
+  typing.className = 'flex justify-start';
+  typing.id = `typing-${deckId}`;
+  typing.innerHTML = `<div class="bg-zinc-50 dark:bg-zinc-800 border border-zinc-200/70 dark:border-zinc-700/60 rounded-[20px] rounded-bl-[6px] px-3.5 py-2.5"><div class="typing text-zinc-500"><span></span><span></span></div></div>`;
+  messagesEl.appendChild(typing);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  
+  setTimeout(()=>{
+    typing.remove();
+    const aiResp = generateResponse(deck, text);
+    deck.messages.push(aiResp);
+    appendMessage(deckId, aiResp);
+    
+    // auto create new part after 5 exchanges (10 messages)
+    if(deck.messages.length >= 10 && !deck._split){
+      deck._split = true;
+      createNewPart(deck);
+    }
+  }, 800 + Math.random()*400);
+}
+
+function generateResponse(deck, userText){
+  const g = deck.group;
+  if(g==='tokyo') return {role:'ai', text:'Love it. I’ll lock in those preferences — adding 2 food tours (Tsukiji breakfast, Shinjuku izakaya) and keeping museum time light. Want a Google Maps list next?'};
+  if(g==='python') return {role:'ai', text:'Try adding errors="coerce" and check dtypes after cleaning. Want me to write a reusable safe_merge() helper?', code:'def safe_merge(a,b,on):\n  a[on]=a[on].astype(str).str.strip()\n  b[on]=b[on].astype(str).str.strip()\n  return a.merge(b, on=on)'};
+  if(g==='recipes') return {role:'ai', text:'Grocery list ready: salmon, white miso, tofu, turkey, butter lettuce, ginger, soy. ~$38 total. I can split by store aisle.'};
+  if(g==='books') return {role:'ai', text:'Added discussion guide — themes: consciousness, memory, love. Would you like character arc maps or spoiler-free questions first?'};
+  if(userText.toLowerCase().includes('branch')) return {role:'ai', text:'Branched! I carried over context but started a fresh card so we don’t lose the thread.'};
+  return {role:'ai', text:'Got it — continuing here. Because this is a deck, we keep context tight. What’s the next step?'};
+}
+
+function createNewPart(prevDeck){
+  const idx = decks.findIndex(d=>d.id===prevDeck.id);
+  const newDeck = {
+    id: prevDeck.group + '-' + Date.now(),
+    group: prevDeck.group,
+    title: prevDeck.title,
+    part: (prevDeck.part||1)+1,
+    avatar: prevDeck.avatar,
+    color: prevDeck.color,
+    summary: 'Continuing: ' + prevDeck.summary,
+    timestamp: 'now',
+    context: `Continued from Part ${prevDeck.part} • remembered key preferences`,
+    messages: [{role:'ai', text:`Continuing your ${prevDeck.title.toLowerCase()}. I've carried over the context from Part ${prevDeck.part} so we don't start over.`}]
+  };
+  decks.splice(idx+1, 0, newDeck);
+  const el = createDeckElement(newDeck);
+  setTimeout(()=> el.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}), 100);
+  updateMinimap();
+  showToast(`Created Part ${newDeck.part}`);
+}
+
+function createBranch(deckId){
+  const src = decks.find(d=>d.id===deckId);
+  const branch = {
+    id:'branch-'+Date.now(),
+    group:'branch',
+    title:`Branch: ${src.title}`,
+    part:1,
+    avatar:'🌿',
+    color:'from-teal-500 to-cyan-500',
+    summary:'Branched conversation',
+    timestamp:'now',
+    context:`Branched from "${src.title}"`,
+    messages:[{role:'ai', text:'New branch created. I kept the context, but this is a clean slate to explore a tangent.'}]
+  };
+  decks.unshift(branch);
+  renderAll();
+  setTimeout(()=> document.querySelector(`[data-id="${branch.id}"]`)?.scrollIntoView({behavior:'smooth', inline:'center'}), 50);
+  showToast('Branch created');
+}
+
+function renderAll(){
+  deckContainer.innerHTML = '';
+  decks.forEach(createDeckElement);
+  updateMinimap();
+  deckCount.textContent = decks.length;
+  initSortable();
+}
+
+function updateMinimap(){
+  minimap.innerHTML = decks.map((d,i)=>`<button data-go="${d.id}" class="h-1.5 rounded-full transition-all duration-300 ${i===0?'w-8 bg-zinc-900 dark:bg-white':'w-6 bg-zinc-300 dark:bg-zinc-700 hover:bg-zinc-400 dark:hover:bg-zinc-600'}" aria-label="Go to ${d.title}"></button>`).join('');
+  minimap.querySelectorAll('button').forEach(btn=>{
+    btn.onclick = ()=> document.querySelector(`[data-id="${btn.dataset.go}"]`)?.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'});
+  });
+  deckCount.textContent = decks.length;
+}
+
+let activeId = decks[0]?.id;
+function updateActiveDot(){
+  const cards = [...deckContainer.querySelectorAll('.deck-card')];
+  if(!cards.length) return;
+  const center = deckContainer.scrollLeft + deckContainer.clientWidth/2;
+  let best = cards[0], bestDist = Infinity;
+  cards.forEach(c=>{ const dist = Math.abs(c.offsetLeft + c.clientWidth/2 - center); if(dist<bestDist){bestDist=dist; best=c;} });
+  activeId = best.dataset.id;
+  [...minimap.children].forEach((b,i)=>{ const isActive = decks[i]?.id===activeId; b.className = `h-1.5 rounded-full transition-all duration-300 ${isActive?'w-8 bg-zinc-900 dark:bg-white':'w-6 bg-zinc-300 dark:bg-zinc-700 hover:bg-zinc-400 dark:hover:bg-zinc-600'}` });
+}
+deckContainer.addEventListener('scroll', ()=> requestAnimationFrame(updateActiveDot), {passive:true});
+
+function initSortable(){
+  if(window.innerWidth < 768) return;
+  Sortable.create(deckContainer, {
+    animation:200,
+    draggable:'.deck-card',
+    ghostClass:'opacity-40',
+    chosenClass:'scale-[0.98]',
+    onEnd: (e)=>{
+      const moved = decks.splice(e.oldIndex,1)[0];
+      decks.splice(e.newIndex,0,moved);
+      updateMinimap();
+    }
+  });
+}
+
+// Nav buttons
+document.getElementById('navLeft').onclick = ()=> deckContainer.scrollBy({left:-420, behavior:'smooth'});
+document.getElementById('navRight').onclick = ()=> deckContainer.scrollBy({left:420, behavior:'smooth'});
+
+// Keyboard
+window.addEventListener('keydown', (e)=>{
+  if(e.key==='Tab'){ e.preventDefault(); toggleOverview(); }
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); document.getElementById('search').focus(); }
+  if(document.activeElement.tagName==='INPUT') return;
+  if(e.key==='ArrowRight'){ e.preventDefault(); document.getElementById('navRight').click(); }
+  if(e.key==='ArrowLeft'){ e.preventDefault(); document.getElementById('navLeft').click(); }
+});
+
+// Overview
+const overview = document.getElementById('overview');
+function toggleOverview(){
+  const isHidden = overview.classList.contains('hidden');
+  if(isHidden){
+    overview.classList.remove('hidden');
+    setTimeout(()=> overview.classList.remove('opacity-0'), 10);
+    renderOverview();
+  } else {
+    overview.classList.add('opacity-0');
+    setTimeout(()=> overview.classList.add('hidden'), 200);
+  }
+}
+document.getElementById('closeOverview').onclick = toggleOverview;
+function renderOverview(){
+  const grid = document.getElementById('overviewGrid');
+  grid.innerHTML = decks.map(d=>`
+    <button data-goto="${d.id}" class="group text-left p-4 rounded-[20px] bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition text-white backdrop-blur">
+      <div class="flex items-center gap-2.5 mb-2">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br ${d.color} grid place-items-center">${d.avatar}</div>
+        <div class="min-w-0 flex-1">
+          <p class="font-medium truncate">${d.title} ${d.part>1?`· P${d.part}`:''}</p>
+          <p class="text-[12px] text-zinc-400 truncate">${d.summary}</p>
+        </div>
+      </div>
+      <p class="text-[13px] text-zinc-300 line-clamp-2 leading-snug">${(d.messages[d.messages.length-1]?.text||'').slice(0,120)}</p>
+    </button>
+  `).join('');
+  grid.querySelectorAll('button').forEach(b=> b.onclick = ()=> { toggleOverview(); document.querySelector(`[data-id="${b.dataset.goto}"]`)?.scrollIntoView({behavior:'smooth', inline:'center'}); });
+}
+
+// Theme
+const themeToggle = document.getElementById('themeToggle');
+function setTheme(dark){ document.documentElement.classList.toggle('dark', dark); localStorage.theme = dark?'dark':'light'; }
+setTheme(localStorage.theme ? localStorage.theme==='dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
+themeToggle.onclick = ()=> setTheme(!document.documentElement.classList.contains('dark'));
+
+// Search
+document.getElementById('search').addEventListener('input', e=>{
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll('.deck-card').forEach(card=>{
+    const d = decks.find(x=>x.id===card.dataset.id);
+    const match = !q || d.title.toLowerCase().includes(q) || d.summary.toLowerCase().includes(q);
+    card.style.display = match ? '' : 'none';
+  });
+});
+
+// New deck
+document.getElementById('newDeckBtn').onclick = ()=>{
+  const nd = { id:'new-'+Date.now(), group:'new', title:'New Deck', part:1, avatar:'✨', color:'from-zinc-600 to-zinc-800', summary:'Start a new conversation', timestamp:'now', messages:[{role:'ai', text:'Hey! What should we dive into? This deck stays focused — we’ll spawn a new card when it gets long.'}] };
+  decks.unshift(nd);
+  renderAll();
+  setTimeout(()=>{ document.querySelector(`[data-id="${nd.id}"]`)?.scrollIntoView({behavior:'smooth', inline:'center'}); document.querySelector(`[data-id="${nd.id}"] input`)?.focus(); }, 50);
+};
+
+// Toast
+function showToast(text){
+  const t = document.getElementById('toast');
+  document.getElementById('toastText').textContent = text;
+  t.classList.remove('opacity-0','translate-y-2','pointer-events-none');
+  setTimeout(()=>{ t.classList.add('opacity-0','translate-y-2','pointer-events-none'); }, 1800);
+}
+
+// Close menus on click outside
+document.addEventListener('click', ()=> document.querySelectorAll('.more-menu').forEach(m=>m.classList.add('hidden')));
+
+// Init
+renderAll();
+setTimeout(updateActiveDot, 300);
+
+// Demo hint — show the "aha"
+setTimeout(()=> showToast('Tip: swipe → to change topics, not scroll ↑'), 1200);
+</script>
+<script>(function(){document.addEventListener("click",function(e){var a=e.target.closest("[data-product-id]");if(!a)return;e.preventDefault();var pid=a.getAttribute("data-product-id");if(pid)parent.postMessage({type:"ecto-artifact-link-click",productId:pid},"*")})})();</script>
+</body>
+</html>

@@ -206,6 +206,7 @@ body {
   margin: 1.25rem 0 0.55rem;
   font-weight: 600;
   line-height: 1.28;
+  scroll-margin-top: 20px;
 }
 
 .markdown-body :is(h1, h2, h3, h4, h5, h6):not(.markdown-table-title) {
