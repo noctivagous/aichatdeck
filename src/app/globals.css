@@ -19,6 +19,119 @@ body {
   font-family: var(--font-sans);
 }
 
+:root {
+  --vt-exit-duration: 140ms;
+  --vt-enter-duration: 180ms;
+  --vt-slide-duration: 300ms;
+  --vt-slide-distance: 180px;
+  --vt-out-opacity: 0.82;
+  --vt-in-opacity: 0.96;
+}
+
+html[data-vt-direction="forward"] ::view-transition-old(root),
+html[data-vt-direction="forward"] ::view-transition-old(main-panel) {
+  animation:
+    var(--vt-exit-duration) ease-in both vt-fade-out,
+    var(--vt-slide-duration) cubic-bezier(0.22, 0.9, 0.2, 1) both vt-slide-to-left;
+}
+
+html[data-vt-direction="forward"] ::view-transition-new(root),
+html[data-vt-direction="forward"] ::view-transition-new(main-panel) {
+  animation:
+    var(--vt-enter-duration) ease-out var(--vt-exit-duration) both vt-fade-in,
+    var(--vt-slide-duration) cubic-bezier(0.18, 0.86, 0.26, 1) both vt-slide-from-right;
+}
+
+html[data-vt-direction="back"] ::view-transition-old(root),
+html[data-vt-direction="back"] ::view-transition-old(main-panel) {
+  animation:
+    var(--vt-exit-duration) ease-in both vt-fade-out,
+    var(--vt-slide-duration) cubic-bezier(0.22, 0.9, 0.2, 1) both vt-slide-to-right;
+}
+
+html[data-vt-direction="back"] ::view-transition-new(root),
+html[data-vt-direction="back"] ::view-transition-new(main-panel) {
+  animation:
+    var(--vt-enter-duration) ease-out var(--vt-exit-duration) both vt-fade-in,
+    var(--vt-slide-duration) cubic-bezier(0.18, 0.86, 0.26, 1) both vt-slide-from-left;
+}
+
+::view-transition-group(app-header),
+::view-transition-group(session-outline) {
+  animation: none;
+  z-index: 20;
+}
+
+::view-transition-old(app-header),
+::view-transition-new(app-header),
+::view-transition-old(session-outline),
+::view-transition-new(session-outline) {
+  animation: none;
+}
+
+@keyframes vt-fade-in {
+  from {
+    opacity: var(--vt-in-opacity);
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes vt-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: var(--vt-out-opacity);
+  }
+}
+
+@keyframes vt-slide-from-right {
+  from {
+    transform: translateX(var(--vt-slide-distance));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes vt-slide-to-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(var(--vt-slide-distance) * -1));
+  }
+}
+
+@keyframes vt-slide-from-left {
+  from {
+    transform: translateX(calc(var(--vt-slide-distance) * -1));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes vt-slide-to-right {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--vt-slide-distance));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}
+
 .overflow-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgb(161 161 170 / 0.75) rgb(228 228 231 / 0.45);

@@ -6,6 +6,7 @@ import { LayoutTemplate, Paperclip, Send, Square } from "lucide-react";
 import { useKeybindings } from "@/hooks/useKeybindings";
 import { formatShortcut } from "@/lib/keybindings/match";
 import type { Keybinding } from "@/lib/keybindings/types";
+import { cn } from "@/lib/utils";
 
 type ComposerProps = {
   value: string;
@@ -67,17 +68,42 @@ export function Composer({
         type="button"
         role="switch"
         aria-checked={centerNewPages}
+        aria-label="Center new pages"
         title="When enabled, newly sealed pages scroll into view and center automatically"
         onClick={() => onCenterNewPagesChange(!centerNewPages)}
-        className={`mb-0.5 h-[46px] w-[72px] shrink-0 rounded-[14px] border px-2 text-left text-[10px] leading-tight transition sm:w-auto sm:px-3 sm:text-[11px] ${
+        className={cn(
+          "mb-0.5 flex h-[46px] shrink-0 items-center gap-2 rounded-[14px] border px-2.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 sm:px-3",
           centerNewPages
-            ? "border-blue-500/40 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
-            : "border-zinc-200/70 bg-zinc-100 text-zinc-500 hover:bg-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
-        }`}
+            ? "border-blue-500/40 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10"
+            : "border-zinc-200/70 bg-zinc-100 hover:bg-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800",
+        )}
       >
-        center
-        <br />
-        new pages
+        <span
+          className={cn(
+            "text-left text-[10px] leading-tight sm:text-[11px]",
+            centerNewPages
+              ? "text-blue-700 dark:text-blue-300"
+              : "text-zinc-500 dark:text-zinc-400",
+          )}
+        >
+          center
+          <br />
+          new pages
+        </span>
+        <span
+          aria-hidden
+          className={cn(
+            "relative inline-flex h-[18px] w-8 shrink-0 rounded-full transition-colors duration-200",
+            centerNewPages ? "bg-blue-500" : "bg-zinc-300 dark:bg-zinc-600",
+          )}
+        >
+          <span
+            className={cn(
+              "absolute top-0.5 left-0.5 size-3.5 rounded-full bg-white shadow-sm transition-transform duration-200",
+              centerNewPages && "translate-x-3.5",
+            )}
+          />
+        </span>
       </button>
       <div className="relative flex-1">
         <textarea

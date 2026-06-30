@@ -1,15 +1,21 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { OutlineEntry, SessionOutline } from "@/lib/session-outline";
-import { ListTree } from "lucide-react";
+import { ArrowLeft, ListTree } from "lucide-react";
+import { pushWithViewTransition } from "@/lib/view-transition-nav";
 
 type SessionOutlineSidebarProps = {
   outline: SessionOutline | null;
   mode?: "interactive" | "preview";
   activePageIndex?: number;
   onSelectPage?: (index: number, headingSlug?: string) => void;
+  backHref?: string;
+  transitionName?: string;
   className?: string;
 };
 
@@ -18,9 +24,9 @@ function entryIndent(level: OutlineEntry["level"]): string {
     case 1:
       return "pl-0";
     case 2:
-      return "pl-3";
+      return "pl-1.5";
     case 3:
-      return "pl-6";
+      return "pl-3";
     default:
       return "pl-0";
   }
@@ -44,8 +50,11 @@ export function SessionOutlineSidebar({
   mode = "preview",
   activePageIndex,
   onSelectPage,
+  backHref,
+  transitionName,
   className,
 }: SessionOutlineSidebarProps) {
+  const router = useRouter();
   const interactive = mode === "interactive" && !!onSelectPage;
 
   const handleSelect = (pageIndex: number, headingSlug?: string) => {
@@ -55,16 +64,47 @@ export function SessionOutlineSidebar({
 
   return (
     <aside
+      style={transitionName ? { viewTransitionName: transitionName } : undefined}
       className={cn(
         "flex w-[260px] shrink-0 flex-col border-r border-zinc-200/70 bg-zinc-50/80 dark:border-zinc-800 dark:bg-zinc-950/60",
         className,
       )}
     >
-      <div className="shrink-0 border-b border-zinc-200/70 px-4 py-3.5 dark:border-zinc-800">
-        <div className="flex items-start gap-2.5">
-          <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
-            <ListTree className="h-3.5 w-3.5" />
-          </div>
+      <div className="flex h-[60px] shrink-0 items-center border-b border-zinc-200/70 px-4 dark:border-zinc-800">
+        <div className="flex min-w-0 items-center gap-2.5">
+          {backHref ? (
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              asChild
+            >
+              <Link
+                href={backHref}
+                aria-label="Back to conversations"
+                onClick={(event) => {
+                  if (
+                    event.defaultPrevented ||
+                    event.button !== 0 ||
+                    event.metaKey ||
+                    event.ctrlKey ||
+                    event.shiftKey ||
+                    event.altKey
+                  ) {
+                    return;
+                  }
+                  event.preventDefault();
+                  pushWithViewTransition(router, backHref, "back");
+                }}
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          ) : (
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <ListTree className="h-3.5 w-3.5" />
+            </div>
+          )}
           <div className="min-w-0">
             <h2 className="truncate text-[13px] font-semibold leading-tight tracking-tight">
               {outline?.title ?? "Session outline"}
@@ -130,7 +170,7 @@ export function SessionOutlineSidebar({
                   </button>
 
                   {hasChildren ? (
-                    <div className="mb-1 flex flex-col gap-0.5 pl-4 pr-1">
+                    <div className="mb-1 flex flex-col gap-0.5 pl-2 pr-1">
                       {page.entries.length > 0
                         ? page.entries.map((entry) => (
                             <button

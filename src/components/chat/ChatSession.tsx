@@ -44,6 +44,8 @@ import type { ChatNavigateTarget } from "@/lib/chat-navigation";
 import { PageWidthSlider } from "./PageWidthSlider";
 import { PageColumnsControl } from "./PageColumnsControl";
 import { ReplyFontSizeControl } from "./ReplyFontSizeControl";
+import { cn } from "@/lib/utils";
+import { pushWithViewTransition } from "@/lib/view-transition-nav";
 
 type ChatSessionProps = {
   conversationId: string;
@@ -342,14 +344,41 @@ export function ChatSession({
           outline={outline}
           activePageIndex={focusedPageIndex}
           onSelectPage={handleOutlineSelectPage}
+          backHref="/"
+          transitionName="session-outline"
           className="hidden lg:flex"
         />
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
-      <header className="z-40 flex h-[60px] shrink-0 items-center gap-3 border-b border-zinc-200/70 bg-white/80 px-4 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/70 md:px-6">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/" aria-label="Back to conversations">
+      <header
+        style={{ viewTransitionName: "app-header" }}
+        className="z-40 flex h-[60px] shrink-0 items-center gap-3 border-b border-zinc-200/70 bg-white/80 px-4 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/70 md:px-6"
+      >
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(sidebarOpen && "lg:hidden")}
+          asChild
+        >
+          <Link
+            href="/"
+            aria-label="Back to conversations"
+            onClick={(event) => {
+              if (
+                event.defaultPrevented ||
+                event.button !== 0 ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              ) {
+                return;
+              }
+              event.preventDefault();
+              pushWithViewTransition(router, "/", "back");
+            }}
+          >
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -442,26 +471,31 @@ export function ChatSession({
         </div>
       </header>
 
-      <SlidesTrack
-        ref={slidesTrackRef}
-        pages={pages}
-        pageWidth={pageWidth}
-        columnCount={columnCount}
-        fontScale={fontScale}
-        lineHeight={lineHeight}
-        isStreaming={isStreaming}
-        streamingMessageId={streamingMessageId}
-        composerValue={input}
-        onComposerChange={setInput}
-        onSend={handleSend}
-        onSendToNewPage={handleSendToNewPage}
-        onStop={stop}
-        onAttach={handleAttach}
-        initialFocusedPageIndex={focusedPageIndex}
-        onFocusedPageChange={handleFocusedPageChange}
-        centerNewPages={centerNewPages}
-        onCenterNewPagesChange={setCenterNewPagesEnabled}
-      />
+      <div
+        style={{ viewTransitionName: "main-panel" }}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <SlidesTrack
+          ref={slidesTrackRef}
+          pages={pages}
+          pageWidth={pageWidth}
+          columnCount={columnCount}
+          fontScale={fontScale}
+          lineHeight={lineHeight}
+          isStreaming={isStreaming}
+          streamingMessageId={streamingMessageId}
+          composerValue={input}
+          onComposerChange={setInput}
+          onSend={handleSend}
+          onSendToNewPage={handleSendToNewPage}
+          onStop={stop}
+          onAttach={handleAttach}
+          initialFocusedPageIndex={focusedPageIndex}
+          onFocusedPageChange={handleFocusedPageChange}
+          centerNewPages={centerNewPages}
+          onCenterNewPagesChange={setCenterNewPagesEnabled}
+        />
+      </div>
       </div>
     </div>
   );

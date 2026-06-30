@@ -34,6 +34,7 @@ import { SessionOutlineSidebar } from "./SessionOutlineSidebar";
 import { computePages } from "@/lib/pages";
 import { buildSessionOutline } from "@/lib/session-outline";
 import { buildChatNavigateHref } from "@/lib/chat-navigation";
+import { pushWithViewTransition } from "@/lib/view-transition-nav";
 
 const VIEW_MODE_STORAGE_KEY = "aichatdeck:conversation-list:view-mode";
 
@@ -91,7 +92,7 @@ export function ConversationList() {
 
   const openSelectedConversation = useCallback(() => {
     const conv = conversationsRef.current[selectedIndexRef.current];
-    if (conv) router.push(`/chat/${conv.id}`);
+    if (conv) pushWithViewTransition(router, `/chat/${conv.id}`, "forward");
   }, [router]);
 
   const menuBindings = useMemo<Keybinding[]>(
@@ -150,7 +151,11 @@ export function ConversationList() {
     (pageIndex: number, headingSlug?: string) => {
       const conv = conversationsRef.current[selectedIndexRef.current];
       if (!conv) return;
-      router.push(buildChatNavigateHref(conv.id, pageIndex, headingSlug));
+      pushWithViewTransition(
+        router,
+        buildChatNavigateHref(conv.id, pageIndex, headingSlug),
+        "forward",
+      );
     },
     [router],
   );
@@ -173,7 +178,7 @@ export function ConversationList() {
       "New conversation",
       encodeModelRef(settings.defaultModel),
     );
-    router.push(`/chat/${conv.id}`);
+    pushWithViewTransition(router, `/chat/${conv.id}`, "forward");
   };
 
   const handleExport = async () => {
@@ -224,6 +229,20 @@ export function ConversationList() {
       <Link
         key={conv.id}
         href={`/chat/${conv.id}`}
+        onClick={(event) => {
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
+          event.preventDefault();
+          pushWithViewTransition(router, `/chat/${conv.id}`, "forward");
+        }}
         data-conversation-index={index}
         className={cn(
           mode === "list"
@@ -258,7 +277,10 @@ export function ConversationList() {
 
   return (
     <div className="flex h-[100dvh] flex-col">
-      <header className="z-40 flex h-[60px] shrink-0 items-center gap-3 border-b border-zinc-200/70 bg-white/80 px-4 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/70 md:px-6">
+      <header
+        style={{ viewTransitionName: "app-header" }}
+        className="z-40 flex h-[60px] shrink-0 items-center gap-3 border-b border-zinc-200/70 bg-white/80 px-4 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/70 md:px-6"
+      >
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-[0_4px_12px_-4px_rgba(37,99,235,0.5)]">
@@ -330,10 +352,13 @@ export function ConversationList() {
         </div>
       </header>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-4 py-4 md:px-6">
+      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-4 pb-4 md:px-6">
         {viewMode === "list" ? (
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:gap-0 lg:grid-cols-[minmax(0,1fr)_260px]">
-            <ScrollArea className="min-h-[320px] rounded-xl border border-zinc-200 dark:border-zinc-800 lg:min-h-0">
+            <ScrollArea
+              style={{ viewTransitionName: "main-panel" }}
+              className="min-h-[320px] rounded-xl border border-zinc-200 dark:border-zinc-800 lg:min-h-0"
+            >
               <div
                 ref={listRef}
                 className="divide-y divide-zinc-200 dark:divide-zinc-800"
@@ -346,12 +371,16 @@ export function ConversationList() {
               mode="interactive"
               outline={selectedOutline}
               onSelectPage={handleOutlineNavigate}
+              transitionName="session-outline"
               className="min-h-[280px] rounded-xl border border-zinc-200 dark:border-zinc-800 lg:min-h-0 lg:border-r-0"
             />
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-4">
-            <ScrollArea className="h-[150px] shrink-0 rounded-xl border border-zinc-200 dark:border-zinc-800">
+            <ScrollArea
+              style={{ viewTransitionName: "main-panel" }}
+              className="h-[150px] shrink-0 rounded-xl border border-zinc-200 dark:border-zinc-800"
+            >
               <div ref={listRef} className="flex h-full w-max min-w-full items-stretch gap-3 p-3">
                 {renderConversationItems("cards")}
               </div>
@@ -361,6 +390,7 @@ export function ConversationList() {
               mode="interactive"
               outline={selectedOutline}
               onSelectPage={handleOutlineNavigate}
+              transitionName="session-outline"
               className="min-h-[320px] w-full rounded-xl border border-zinc-200 dark:border-zinc-800"
             />
           </div>

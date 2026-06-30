@@ -1,21 +1,39 @@
-import { Suspense } from "react";
-import { ChatClient } from "@/components/chat/ChatClient";
+import type { UIMessage } from "ai";
+import { notFound } from "next/navigation";
+import { ChatSession } from "@/components/chat/ChatSession";
+import { getConversation } from "@/lib/server/conversations";
+import { parseChatNavigateTarget } from "@/lib/chat-navigation";
 
 type ChatPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function ChatPage({ params }: ChatPageProps) {
+export default async function ChatPage({ params, searchParams }: ChatPageProps) {
   const { id } = await params;
+  const record = await getConversation(id);
+  if (!record) notFound();
+
+  const query = await searchParams;
+  const navigateTarget = parseChatNavigateTarget(
+    new URLSearchParams(
+      Object.entries(query).flatMap(([key, value]) => {
+        if (Array.isArray(value)) return value.map((item) => [key, item]);
+        if (value === undefined) return [];
+        return [[key, value]];
+      }),
+    ),
+  );
+
   return (
-    <Suspense
-      fallback={
-        <div className="grid h-[100dvh] place-items-center text-sm text-zinc-500">
-          Loading conversation…
-        </div>
-      }
-    >
-      <ChatClient conversationId={id} />
-    </Suspense>
+    <ChatSession
+      conversationId={record.id}
+      initialTitle={record.title}
+      initialModelId={record.modelId}
+      initialMessages={record.messages as UIMessage[]}
+      initialPageBreaks={record.pageBreaks ?? []}
+      initialFocusedPageIndex={navigateTarget?.pageIndex ?? record.focusedPageIndex ?? 0}
+      initialNavigateTo={navigateTarget}
+    />
   );
 }

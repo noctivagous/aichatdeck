@@ -51,6 +51,18 @@ type HeadingCandidate = {
   text: string;
 };
 
+function stripInlineMarkdown(text: string): string {
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/(\*|_)(.*?)\1/g, "$2")
+    .replace(/~~(.*?)~~/g, "$1")
+    .replace(/\\([\\`*_{}\[\]()#+\-.!])/g, "$1")
+    .trim();
+}
+
 function extractHeadingCandidates(markdown: string): HeadingCandidate[] {
   const entries: HeadingCandidate[] = [];
   let openFence: { marker: "`" | "~"; length: number } | null = null;
@@ -76,9 +88,11 @@ function extractHeadingCandidates(markdown: string): HeadingCandidate[] {
     if (!match) continue;
 
     const level = match[1]!.length as 1 | 2 | 3;
-    const text = match[2]!
+    const text = stripInlineMarkdown(
+      match[2]!
       .replace(/\s+#+\s*$/, "")
-      .trim();
+      .trim(),
+    );
     if (!text) continue;
     entries.push({ level, text });
   }

@@ -29,7 +29,7 @@ src/
     settings/     # Provider config UI
     dev/page-card/# Component dev page
   components/
-    chat/         # Chat UI components (ChatSession, SlidesTrack, Composer, etc.)
+    chat/         # Chat UI (ChatSession, SlidesTrack, Composer, SessionOutlineSidebar, etc.)
     ui/           # Radix UI primitives (button, dialog, select, etc.)
   hooks/          # React hooks wrapping localStorage settings
   lib/
@@ -37,6 +37,9 @@ src/
     storage/      # Client-side: fetch-based API wrappers
     providers/    # One file per provider (openai, anthropic, google, openrouter, xai)
     keybindings/  # Custom keyboard binding system
+    session-outline.ts  # Extract markdown headings from messages into a navigable outline
+    scroll-to-heading.ts# Scroll within a slide to a heading by slug
+    chat-navigation.ts  # URL query-param navigation (?page=&heading=)
 ```
 
 ## Storage
@@ -64,6 +67,8 @@ Core concept: conversations are split into horizontally-scrollable "pages" (slid
 Custom hook-based system (`useKeybindings` with `KeybindingsProvider` context).
 Key bindings are scoped (e.g., `"composer"`, `"global"`).
 See `src/lib/keybindings/` and `src/hooks/useKeybindings.ts`.
+
+Registered global bindings: `Alt+M` → main menu (`/`).
 
 ## Theme
 
