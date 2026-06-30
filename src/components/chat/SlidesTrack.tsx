@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { totalTokens } from "@/lib/tokens";
 import { slideEdgeGutter } from "@/lib/page-width";
+import { formatShortcut } from "@/lib/keybindings/match";
 import {
   findHeadingInSlide,
   scrollViewportToHeading,
@@ -364,9 +365,9 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
     };
   }, [isSlideCentered, onFocusedPageChange, pages.length]);
 
-  const scrollHoveredSlide = useCallback((delta: number) => {
-    const index = hoveredSlideIndexRef.current;
-    if (index === null) return;
+  const scrollSlideContent = useCallback((delta: number) => {
+    const index =
+      hoveredSlideIndexRef.current ?? currentIndexRef.current;
 
     const wrap = wrapRef.current;
     if (!wrap) return;
@@ -444,20 +445,16 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
         id: "slide-scroll-up",
         chord: "arrowup",
         scope: "chat",
-        allowInTypingTarget: true,
-        when: () => hoveredSlideIndexRef.current !== null,
-        handler: () => scrollHoveredSlide(-80),
+        handler: () => scrollSlideContent(-80),
       },
       {
         id: "slide-scroll-down",
         chord: "arrowdown",
         scope: "chat",
-        allowInTypingTarget: true,
-        when: () => hoveredSlideIndexRef.current !== null,
-        handler: () => scrollHoveredSlide(80),
+        handler: () => scrollSlideContent(80),
       },
     ],
-    [focusPage, pages.length, router, scrollHoveredSlide],
+    [focusPage, pages.length, router, scrollSlideContent],
   );
 
   useKeybindings("chat", chatBindings);
@@ -474,6 +471,24 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
         >
           <div className="flex h-full w-max min-w-full items-center gap-5 md:gap-8">
             <div className="shrink-0" style={{ width: edgeGutter }} aria-hidden />
+            {currentIndex === 0 ? (
+              <div className="flex h-[min(680px,calc(100%-16px))] w-[11rem] shrink-0 items-start sm:w-[13rem]">
+                <aside
+                  className="pointer-events-none w-full rounded-xl border border-zinc-200/50 bg-white/40 px-3 py-2.5 text-[11px] leading-snug text-zinc-500 shadow-sm backdrop-blur-md dark:border-zinc-700/45 dark:bg-zinc-950/35 dark:text-zinc-400 sm:text-xs"
+                  aria-hidden
+                >
+                  Press{" "}
+                  <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                    {formatShortcut("arrowleft")}
+                  </span>{" "}
+                  twice or{" "}
+                  <span className="font-medium text-zinc-600 dark:text-zinc-300">
+                    {formatShortcut("alt+m")}
+                  </span>{" "}
+                  to return to the main menu.
+                </aside>
+              </div>
+            ) : null}
             {pages.map((page) => (
               <PageCard
                 key={page.index}
@@ -557,7 +572,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
               onSelect={(index) => focusPage(index, true)}
             />
             <div className="ml-1 hidden items-center gap-1.5 border-l border-zinc-200 pl-2 text-[11px] text-zinc-500 dark:border-zinc-800 sm:flex">
-              hover a slide, ↑↓ to scroll
+              ↑↓ to scroll page
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">

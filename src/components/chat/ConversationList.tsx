@@ -40,12 +40,16 @@ const VIEW_MODE_STORAGE_KEY = "aichatdeck:conversation-list:view-mode";
 
 type ConversationListViewMode = "list" | "cards";
 
+const menuKeyClass =
+  "mx-0.5 inline-flex min-h-[18px] min-w-[18px] items-center justify-center rounded border border-zinc-200 bg-zinc-100 px-1 font-sans text-[10px] font-medium leading-none text-zinc-600 shadow-[0_1px_0_rgba(0,0,0,0.06)] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:shadow-[0_1px_0_rgba(255,255,255,0.04)]";
+
 export function ConversationList() {
   const router = useRouter();
   const [conversations, setConversations] = useState<ConversationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ConversationListViewMode>("list");
   const listRef = useRef<HTMLDivElement>(null);
   const selectedIndexRef = useRef(selectedIndex);
@@ -195,12 +199,24 @@ export function ConversationList() {
     }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDelete = async (id: string) => {
     await deleteConversation(id);
+    setConfirmDeleteId((current) => (current === id ? null : current));
     toast.success("Conversation deleted");
     void refresh();
+  };
+
+  const handleDeleteClick = (
+    conv: ConversationRecord,
+    e: React.MouseEvent,
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (conv.messages.length <= 1) {
+      void handleDelete(conv.id);
+      return;
+    }
+    setConfirmDeleteId(conv.id);
   };
 
   const handleViewModeChange = (nextMode: ConversationListViewMode) => {
@@ -251,7 +267,12 @@ export function ConversationList() {
           selectedIndex === index &&
             "bg-blue-50 ring-2 ring-inset ring-blue-500/35 dark:bg-blue-500/10",
         )}
-        onMouseEnter={() => setSelectedIndex(index)}
+        onMouseEnter={() => {
+          setSelectedIndex(index);
+          setConfirmDeleteId((current) =>
+            current !== null && current !== conv.id ? null : current,
+          );
+        }}
       >
         <div className="min-w-0">
           <p className="truncate font-medium">{conv.title}</p>
@@ -260,17 +281,57 @@ export function ConversationList() {
             {new Date(conv.updatedAt).toLocaleDateString()}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            mode === "list" ? "opacity-0 group-hover:opacity-100" : "self-end",
-          )}
-          onClick={(e) => void handleDelete(conv.id, e)}
-          aria-label="Delete conversation"
-        >
-          <Trash2 className="h-4 w-4 text-zinc-500" />
-        </Button>
+        {confirmDeleteId === conv.id ? (
+          <div
+            className={cn(
+              "flex shrink-0 items-center gap-1.5",
+              mode === "cards" && "mt-3 w-full justify-end border-t border-zinc-200 pt-3 dark:border-zinc-800",
+            )}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <span className="text-xs text-zinc-500">Delete?</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setConfirmDeleteId(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 bg-red-600 px-2 text-xs hover:bg-red-500"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleDelete(conv.id);
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              mode === "list" ? "opacity-0 group-hover:opacity-100" : "self-end",
+            )}
+            onClick={(e) => handleDeleteClick(conv, e)}
+            aria-label="Delete conversation"
+          >
+            <Trash2 className="h-4 w-4 text-zinc-500" />
+          </Button>
+        )}
       </Link>
     ));
   };
@@ -326,6 +387,11 @@ export function ConversationList() {
                 <SquareKanban className="h-3.5 w-3.5" />
               </button>
             </div>
+            <p className="hidden shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400 lg:block">
+              use <kbd className={menuKeyClass}>↑</kbd> and{" "}
+              <kbd className={menuKeyClass}>↓</kbd> to navigate menu,{" "}
+              <kbd className={menuKeyClass}>→</kbd> to open.
+            </p>
           </div>
 
           <div className="ml-auto flex items-center gap-2">
