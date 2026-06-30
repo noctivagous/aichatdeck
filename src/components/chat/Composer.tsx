@@ -36,6 +36,7 @@ export function Composer({
   disabled,
 }: ComposerProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const sendShortcut = formatShortcut("alt+enter");
 
   const bindings = useMemo<Keybinding[]>(
@@ -62,7 +63,23 @@ export function Composer({
     [isStreaming, onSend, onSendToNewPage],
   );
 
+  const chatBindings = useMemo<Keybinding[]>(
+    () => [
+      {
+        id: "focus-composer",
+        chord: "alt+t",
+        scope: "chat",
+        allowInTypingTarget: true,
+        handler: () => {
+          textareaRef.current?.focus();
+        },
+      },
+    ],
+    [],
+  );
+
   useKeybindings("composer", bindings);
+  useKeybindings("chat", chatBindings);
 
   return (
     <div className="mx-auto flex max-w-[900px] items-end gap-2.5">
@@ -107,12 +124,23 @@ export function Composer({
           />
         </span>
       </button>
-      <div className="relative flex-1">
+      <div className="group relative flex-1">
+        {!value && !disabled ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 flex items-start px-4 py-3 pr-11 text-[14px] leading-[1.4] text-zinc-500 group-focus-within:hidden dark:text-zinc-400"
+          >
+            Press{" "}
+            <kbd className={keyBadgeClass}>{formatShortcut("alt+t")}</kbd> to
+            enter this text box
+          </div>
+        ) : null}
         <textarea
+          ref={textareaRef}
           rows={1}
           value={value}
           disabled={disabled}
-          placeholder="Continue on the live page…"
+          aria-label="Message input for the live page"
           onFocus={() => onFocusChange?.(true)}
           onBlur={() => onFocusChange?.(false)}
           onChange={(e) => {

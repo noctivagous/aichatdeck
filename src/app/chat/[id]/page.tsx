@@ -4,6 +4,8 @@ import { ChatSession } from "@/components/chat/ChatSession";
 import { getConversation } from "@/lib/server/conversations";
 import { parseChatNavigateTarget } from "@/lib/chat-navigation";
 
+export const dynamic = "force-dynamic";
+
 type ChatPageProps = {
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;

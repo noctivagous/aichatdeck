@@ -56,6 +56,8 @@ export function matchKey(event: KeyboardEvent, chord: KeyChord): boolean {
       return key === "arrowright" && event.altKey && !event.metaKey && !event.ctrlKey;
     case "alt+m":
       return (key === "m" || key === "µ") && event.altKey && !event.metaKey && !event.ctrlKey;
+    case "alt+t":
+      return (key === "t" || key === "†") && event.altKey && !event.shiftKey && !event.metaKey && !event.ctrlKey;
     default:
       return false;
   }
@@ -77,6 +79,7 @@ const SHORTCUT_LABELS: Record<KeyChord, { mac: string; other: string }> = {
   "alt+arrowleft": { mac: "⌥←", other: "Alt+←" },
   "alt+arrowright": { mac: "⌥→", other: "Alt+→" },
   "alt+m": { mac: "⌥M", other: "Alt+M" },
+  "alt+t": { mac: "⌥T", other: "Alt+T" },
 };
 
 export function formatShortcut(chord: KeyChord): string {

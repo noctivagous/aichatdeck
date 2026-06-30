@@ -133,20 +133,27 @@ export async function updateConversation(
     >
   >,
 ): Promise<void> {
-  const existing = await getConversation(id);
-  if (!existing) return;
-
-  const next: ConversationRecord = {
-    ...existing,
-    ...patch,
-    messages: resolveMessages(existing.messages, patch.messages),
-    focusedPageIndex: parseFocusedPageIndex(
-      patch.focusedPageIndex ?? existing.focusedPageIndex,
-    ),
-    updatedAt: Date.now(),
-  };
-
   await withPersist((database) => {
+    const row = selectOne<ConversationRow>(
+      database,
+      `SELECT id, title, model_id, messages, page_breaks, focused_page_index, created_at, updated_at
+       FROM conversations
+       WHERE id = ?`,
+      [id],
+    );
+    if (!row) return;
+
+    const existing = rowToRecord(row);
+    const next: ConversationRecord = {
+      ...existing,
+      ...patch,
+      messages: resolveMessages(existing.messages, patch.messages),
+      focusedPageIndex: parseFocusedPageIndex(
+        patch.focusedPageIndex ?? existing.focusedPageIndex,
+      ),
+      updatedAt: Date.now(),
+    };
+
     database.run(
       `UPDATE conversations
        SET title = ?, model_id = ?, messages = ?, page_breaks = ?, focused_page_index = ?, updated_at = ?

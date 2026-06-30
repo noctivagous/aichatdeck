@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { computePages, liveMessageCount } from "@/lib/pages";
 import {
+  getConversation,
   conversationTitleFromMessages,
   updateConversation,
 } from "@/lib/db";
@@ -56,6 +57,18 @@ type ChatSessionProps = {
   initialFocusedPageIndex?: number;
   initialNavigateTo?: ChatNavigateTarget | null;
 };
+
+const areNumberArraysEqual = (a: number[], b: number[]) =>
+  a.length === b.length && a.every((value, index) => value === b[index]);
+
+const areMessageListsEqual = (a: UIMessage[], b: UIMessage[]) =>
+  a.length === b.length &&
+  a.every((message, index) => {
+    const other = b[index];
+    if (!other) return false;
+    if (message.id !== other.id || message.role !== other.role) return false;
+    return JSON.stringify(message.parts) === JSON.stringify(other.parts);
+  });
 
 export function ChatSession({
   conversationId,
@@ -104,7 +117,15 @@ export function ChatSession({
     [modelId],
   );
 
-  const { messages, sendMessage, status, stop, regenerate, error } = useChat({
+  const {
+    messages,
+    setMessages,
+    sendMessage,
+    status,
+    stop,
+    regenerate,
+    error,
+  } = useChat({
     id: conversationId,
     messages: initialMessages,
     transport,
@@ -127,6 +148,7 @@ export function ChatSession({
   }, [isStreaming, messages]);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const storageSyncCompleteRef = useRef(false);
   const pageBreaksRef = useRef(pageBreaks);
   const modelIdRef = useRef(modelId);
   const messagesRef = useRef(messages);
@@ -189,7 +211,43 @@ export function ChatSession({
   }, [hydrated, reload]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const latest = await getConversation(conversationId);
+        if (!latest || cancelled) return;
+
+        if (!areMessageListsEqual(messagesRef.current, latest.messages)) {
+          setMessages(latest.messages);
+        }
+
+        const nextPageBreaks = latest.pageBreaks ?? [];
+        if (!areNumberArraysEqual(pageBreaksRef.current, nextPageBreaks)) {
+          pageBreaksRef.current = nextPageBreaks;
+          setPageBreaks(nextPageBreaks);
+        }
+
+        const nextFocused = Math.max(0, latest.focusedPageIndex ?? 0);
+        if (focusedPageRef.current !== nextFocused) {
+          focusedPageRef.current = nextFocused;
+          setFocusedPageIndex(nextFocused);
+        }
+      } finally {
+        if (!cancelled) {
+          storageSyncCompleteRef.current = true;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, setMessages]);
+
+  useEffect(() => {
     if (messages.length === 0) return;
+    if (!storageSyncCompleteRef.current) return;
 
     setTitle(conversationTitleFromMessages(messages));
 
@@ -207,11 +265,12 @@ export function ChatSession({
 
   useEffect(() => {
     const onPageHide = () => {
+      if (!isStreaming) return;
       void flushPersist({ keepalive: true });
     };
     window.addEventListener("pagehide", onPageHide);
     return () => window.removeEventListener("pagehide", onPageHide);
-  }, [flushPersist]);
+  }, [flushPersist, isStreaming]);
 
   useEffect(() => {
     if (error) toast.error(error.message);

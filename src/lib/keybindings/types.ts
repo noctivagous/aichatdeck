@@ -15,7 +15,8 @@ export type KeyChord =
   | "shift+pagedown"
   | "alt+arrowleft"
   | "alt+arrowright"
-  | "alt+m";
+  | "alt+m"
+  | "alt+t";
 
 export type Keybinding = {
   id: string;

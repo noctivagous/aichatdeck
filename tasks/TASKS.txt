@@ -28,6 +28,22 @@ Medium = 3-5 paragraph
 Regular = determined by AI
 
 
+## Chat Features
+
+- Markdown for clickable popover terms.
+The AI includes terms in bold but is told
+to surround them in a markdown tag that
+indicates it is a term that could be clicked
+on for the user to get a definition in
+a popover or start a new slide.
+- The user highlights text and one of the
+popover options that appears is "open in new
+chat"
+
+- Searches for YouTube videos when option
+checked and embeds them in the response.
+
+
 
 ## Chat Types
 
@@ -41,6 +57,11 @@ Features:
 - [ ] During a chat, dropdown menu to the left of the chat box 
 lets the user select chat slide type; the chat session
 enters that mode for the next slide.
+
+- [ ] **Media Search**
+  - Finds media of chosen type with query term
+ and lists them in a 3 x 5 column grid.
+
 
 - [ ] **Brief Responses**
   - [ ] No more than a paragraph response
