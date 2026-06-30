@@ -18,6 +18,8 @@ type ComposerProps = {
   isStreaming: boolean;
   centerNewPages: boolean;
   onCenterNewPagesChange: (enabled: boolean) => void;
+  autoFollowLiveReply: boolean;
+  onAutoFollowLiveReplyChange: (enabled: boolean) => void;
   onFocusChange?: (focused: boolean) => void;
   disabled?: boolean;
 };
@@ -32,6 +34,8 @@ export function Composer({
   isStreaming,
   centerNewPages,
   onCenterNewPagesChange,
+  autoFollowLiveReply,
+  onAutoFollowLiveReplyChange,
   onFocusChange,
   disabled,
 }: ComposerProps) {
@@ -83,47 +87,90 @@ export function Composer({
 
   return (
     <div className="mx-auto flex max-w-[900px] items-end gap-2.5">
-      <button
-        type="button"
-        role="switch"
-        aria-checked={centerNewPages}
-        aria-label="Center new pages"
-        title="When enabled, newly sealed pages scroll into view and center automatically"
-        onClick={() => onCenterNewPagesChange(!centerNewPages)}
-        className={cn(
-          "mb-0.5 flex h-[46px] shrink-0 items-center gap-2 rounded-[14px] border px-2.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 sm:px-3",
-          centerNewPages
-            ? "border-blue-500/40 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10"
-            : "border-zinc-200/70 bg-zinc-100 hover:bg-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800",
-        )}
-      >
-        <span
+      <div className="mb-0.5 flex shrink-0 flex-row gap-1.5">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={centerNewPages}
+          aria-label="Center new pages"
+          title="When enabled, newly sealed pages scroll into view and center automatically"
+          onClick={() => onCenterNewPagesChange(!centerNewPages)}
           className={cn(
-            "text-left text-[10px] leading-tight sm:text-[11px]",
+            "flex h-[46px] items-center gap-2 rounded-[14px] border px-2.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 sm:px-3",
             centerNewPages
-              ? "text-blue-700 dark:text-blue-300"
-              : "text-zinc-500 dark:text-zinc-400",
-          )}
-        >
-          center
-          <br />
-          new pages
-        </span>
-        <span
-          aria-hidden
-          className={cn(
-            "relative inline-flex h-[18px] w-8 shrink-0 rounded-full transition-colors duration-200",
-            centerNewPages ? "bg-blue-500" : "bg-zinc-300 dark:bg-zinc-600",
+              ? "border-blue-500/40 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10"
+              : "border-zinc-200/70 bg-zinc-100 hover:bg-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800",
           )}
         >
           <span
             className={cn(
-              "absolute top-0.5 left-0.5 size-3.5 rounded-full bg-white shadow-sm transition-transform duration-200",
-              centerNewPages && "translate-x-3.5",
+              "text-left text-[10px] leading-tight sm:text-[11px]",
+              centerNewPages
+                ? "text-blue-700 dark:text-blue-300"
+                : "text-zinc-500 dark:text-zinc-400",
             )}
-          />
-        </span>
-      </button>
+          >
+            center
+            <br />
+            new pages
+          </span>
+          <span
+            aria-hidden
+            className={cn(
+              "relative inline-flex h-[18px] w-8 shrink-0 rounded-full transition-colors duration-200",
+              centerNewPages ? "bg-blue-500" : "bg-zinc-300 dark:bg-zinc-600",
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-0.5 left-0.5 size-3.5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                centerNewPages && "translate-x-3.5",
+              )}
+            />
+          </span>
+        </button>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={autoFollowLiveReply}
+          aria-label="Auto-follow live reply"
+          title="When enabled, the live slide auto-scrolls as reply tokens stream in"
+          onClick={() => onAutoFollowLiveReplyChange(!autoFollowLiveReply)}
+          className={cn(
+            "flex h-[46px] items-center gap-2 rounded-[14px] border px-2.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 sm:px-3",
+            autoFollowLiveReply
+              ? "border-blue-500/40 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10"
+              : "border-zinc-200/70 bg-zinc-100 hover:bg-zinc-200/70 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800",
+          )}
+        >
+          <span
+            className={cn(
+              "text-left text-[10px] leading-tight sm:text-[11px]",
+              autoFollowLiveReply
+                ? "text-blue-700 dark:text-blue-300"
+                : "text-zinc-500 dark:text-zinc-400",
+            )}
+          >
+            auto follow
+            <br />
+            live reply
+          </span>
+          <span
+            aria-hidden
+            className={cn(
+              "relative inline-flex h-[18px] w-8 shrink-0 rounded-full transition-colors duration-200",
+              autoFollowLiveReply ? "bg-blue-500" : "bg-zinc-300 dark:bg-zinc-600",
+            )}
+          >
+            <span
+              className={cn(
+                "absolute top-0.5 left-0.5 size-3.5 rounded-full bg-white shadow-sm transition-transform duration-200",
+                autoFollowLiveReply && "translate-x-3.5",
+              )}
+            />
+          </span>
+        </button>
+      </div>
       <div className="group relative flex-1">
         {!value && !disabled ? (
           <div

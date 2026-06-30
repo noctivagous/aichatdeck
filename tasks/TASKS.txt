@@ -43,6 +43,9 @@ chat"
 - Searches for YouTube videos when option
 checked and embeds them in the response.
 
+- Tell AI to wrap questions at the end
+with markdown tags so that AIChatDeck will
+render them as buttons.
 
 
 ## Chat Types

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { PageView } from "@/lib/types";
 import { MessageBubble } from "./MessageBubble";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,6 +11,13 @@ import type { ReplyLineHeightId } from "@/lib/reply-line-height";
 import { ScrollShortcutHint } from "./ScrollShortcutHint";
 import { messageText } from "@/lib/tokens";
 import { PageSlugPlanProvider } from "./heading-slug-context";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type PageCardProps = {
   page: PageView;
@@ -19,6 +26,7 @@ type PageCardProps = {
   composerFocused?: boolean;
   isStreaming: boolean;
   streamingMessageId?: string;
+  autoFollowLiveReply: boolean;
   widthPx: number;
   columnCount: PageColumnCount;
   fontScale: ReplyFontScaleId;
@@ -28,6 +36,15 @@ type PageCardProps = {
   onHoverEnd?: () => void;
 };
 
+const SECTION_LABEL_MAX_LENGTH = 42;
+
+const abbreviateSectionLabel = (text: string) => {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (!compact) return "Conversation section";
+  if (compact.length <= SECTION_LABEL_MAX_LENGTH) return compact;
+  return `${compact.slice(0, SECTION_LABEL_MAX_LENGTH - 1).trimEnd()}…`;
+};
+
 export const PageCard = memo(function PageCard({
   page,
   isLive,
@@ -35,6 +52,7 @@ export const PageCard = memo(function PageCard({
   composerFocused = false,
   isStreaming,
   streamingMessageId,
+  autoFollowLiveReply,
   widthPx,
   columnCount,
   fontScale,
@@ -45,11 +63,12 @@ export const PageCard = memo(function PageCard({
 }: PageCardProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const pinnedToBottomRef = useRef(true);
-
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const lastMessage = page.messages[page.messages.length - 1];
-  const streamingMessage = streamingMessageId
-    ? page.messages.find((message) => message.id === streamingMessageId)
-    : undefined;
+  const streamingMessage =
+    autoFollowLiveReply && streamingMessageId
+      ? page.messages.find((message) => message.id === streamingMessageId)
+      : undefined;
   const streamingTextLength = streamingMessage
     ? messageText(streamingMessage).length
     : 0;
@@ -59,7 +78,79 @@ export const PageCard = memo(function PageCard({
     isStreaming &&
     (!lastMessage || lastMessage.role !== "assistant");
 
+  const sections = useMemo(() => {
+    const items: { id: string; label: string }[] = [];
+    let currentId: string | null = null;
+
+    page.messages.forEach((message, index) => {
+      if (message.role === "user" || currentId === null) {
+        currentId = `section-${page.index}-${index}`;
+        const text = messageText(message);
+        items.push({
+          id: currentId,
+          label:
+            message.role === "user"
+              ? abbreviateSectionLabel(text || "Prompt")
+              : abbreviateSectionLabel(text || "Conversation section"),
+        });
+      }
+    });
+
+    return items;
+  }, [page.index, page.messages]);
+
+  const messageSectionIds = useMemo(() => {
+    const ids = new Map<string, string>();
+    let currentId: string | null = null;
+
+    page.messages.forEach((message, index) => {
+      if (message.role === "user" || currentId === null) {
+        currentId = `section-${page.index}-${index}`;
+      }
+      ids.set(message.id, currentId);
+    });
+
+    return ids;
+  }, [page.index, page.messages]);
+
   useEffect(() => {
+    const first = sections[0]?.id ?? null;
+    setActiveSectionId((current) =>
+      current && sections.some((section) => section.id === current)
+        ? current
+        : first,
+    );
+  }, [sections]);
+
+  useEffect(() => {
+    const viewport = scrollAreaRef.current?.querySelector<HTMLElement>(
+      "[data-radix-scroll-area-viewport]",
+    );
+    if (!viewport || sections.length < 2) return;
+
+    const updateActiveSection = () => {
+      const messages = viewport.querySelectorAll<HTMLElement>("[data-message-id]");
+      if (messages.length === 0) return;
+
+      const viewportTop = viewport.scrollTop + 12;
+      let activeId = messages[0].dataset.sectionId ?? sections[0].id;
+
+      for (const message of messages) {
+        if (message.offsetTop > viewportTop) break;
+        activeId = message.dataset.sectionId ?? activeId;
+      }
+
+      setActiveSectionId((current) => (current === activeId ? current : activeId));
+    };
+
+    updateActiveSection();
+    viewport.addEventListener("scroll", updateActiveSection, { passive: true });
+    return () => viewport.removeEventListener("scroll", updateActiveSection);
+  }, [sections]);
+
+  useEffect(() => {
+    if (!autoFollowLiveReply || !isLive) return;
+
     const viewport = scrollAreaRef.current?.querySelector<HTMLElement>(
       "[data-radix-scroll-area-viewport]",
     );
@@ -74,24 +165,28 @@ export const PageCard = memo(function PageCard({
     onScroll();
     viewport.addEventListener("scroll", onScroll, { passive: true });
     return () => viewport.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [autoFollowLiveReply, isLive]);
 
   useEffect(() => {
-    if (!isLive) return;
+    if (!autoFollowLiveReply || !isLive || !isStreaming) return;
 
     const viewport = scrollAreaRef.current?.querySelector<HTMLElement>(
       "[data-radix-scroll-area-viewport]",
     );
     if (!viewport) return;
-
     if (!pinnedToBottomRef.current) return;
 
     const frame = requestAnimationFrame(() => {
       viewport.scrollTop = viewport.scrollHeight;
     });
-
     return () => cancelAnimationFrame(frame);
-  }, [isLive, page.messages.length, streamingTextLength]);
+  }, [
+    autoFollowLiveReply,
+    isLive,
+    isStreaming,
+    page.messages.length,
+    streamingTextLength,
+  ]);
 
   return (
     <article
@@ -133,6 +228,48 @@ export const PageCard = memo(function PageCard({
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
+            {sections.length > 1 ? (
+              <div onClick={(event) => event.stopPropagation()}>
+                <Select
+                  value={activeSectionId ?? sections[0].id}
+                  onValueChange={(value) => {
+                    setActiveSectionId(value);
+                    const viewport = scrollAreaRef.current?.querySelector<HTMLElement>(
+                      "[data-radix-scroll-area-viewport]",
+                    );
+                    if (!viewport) return;
+
+                    const target = viewport.querySelector<HTMLElement>(
+                      `[data-section-id="${value}"]`,
+                    );
+                    if (!target) return;
+
+                    viewport.scrollTo({
+                      top: target.offsetTop,
+                      behavior: "smooth",
+                    });
+                  }}
+                >
+                  <SelectTrigger
+                    className="h-6 w-[170px] rounded-md border-zinc-200/80 bg-zinc-50/90 px-2 text-[11px] dark:border-zinc-700/80 dark:bg-zinc-800/70"
+                    aria-label="Current prompt section"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent align="end">
+                    {sections.map((section) => (
+                      <SelectItem
+                        key={section.id}
+                        value={section.id}
+                        className="max-w-[280px] text-[12px]"
+                      >
+                        {section.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             {isFocused ? (
               <span className="shrink-0 rounded-md border border-zinc-200/80 bg-zinc-50/80 px-1.5 py-0.5 text-[11px] text-zinc-500 dark:border-zinc-700/80 dark:bg-zinc-800/50 dark:text-zinc-400">
                 <ScrollShortcutHint composerFocused={composerFocused} />
@@ -171,17 +308,22 @@ export const PageCard = memo(function PageCard({
             <PageSlugPlanProvider page={page}>
             <div className="space-y-3.5 pr-3">
               {page.messages.map((msg) => (
-                <MessageBubble
+                <div
                   key={msg.id}
-                  message={msg}
-                  columnCount={
-                    msg.role === "assistant" ? columnCount : undefined
-                  }
-                  fontScale={fontScale}
-                  lineHeight={lineHeight}
-                  streaming={isStreaming && msg.id === streamingMessageId}
-                  animate={msg.id !== streamingMessageId}
-                />
+                  data-message-id={msg.id}
+                  data-section-id={messageSectionIds.get(msg.id)}
+                >
+                  <MessageBubble
+                    message={msg}
+                    columnCount={
+                      msg.role === "assistant" ? columnCount : undefined
+                    }
+                    fontScale={fontScale}
+                    lineHeight={lineHeight}
+                    streaming={isStreaming && msg.id === streamingMessageId}
+                    animate={msg.id !== streamingMessageId}
+                  />
+                </div>
               ))}
               {showTypingIndicator ? (
                 <div className="flex justify-start">
@@ -218,6 +360,7 @@ export const PageCard = memo(function PageCard({
     prev.fontScale === next.fontScale &&
     prev.lineHeight === next.lineHeight &&
     prev.isFocused === next.isFocused &&
-    prev.composerFocused === next.composerFocused
+    prev.composerFocused === next.composerFocused &&
+    prev.autoFollowLiveReply === next.autoFollowLiveReply
   );
 });

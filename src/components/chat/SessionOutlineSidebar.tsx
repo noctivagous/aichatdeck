@@ -35,13 +35,13 @@ function entryIndent(level: OutlineEntry["level"]): string {
 function entryTextClass(level: OutlineEntry["level"]): string {
   switch (level) {
     case 1:
-      return "text-[13px] font-semibold text-zinc-800 dark:text-zinc-100";
+      return "text-[15px] font-semibold text-zinc-800 dark:text-zinc-100";
     case 2:
-      return "text-[12px] font-medium text-zinc-600 dark:text-zinc-300";
+      return "text-[14px] font-medium text-zinc-600 dark:text-zinc-300";
     case 3:
-      return "text-[11px] text-zinc-500 dark:text-zinc-400";
+      return "text-[13px] text-zinc-500 dark:text-zinc-400";
     default:
-      return "text-[12px]";
+      return "text-[14px]";
   }
 }
 
@@ -131,8 +131,7 @@ export function SessionOutlineSidebar({
               const isActive =
                 activePageIndex !== undefined &&
                 activePageIndex === page.pageIndex;
-              const hasChildren =
-                page.entries.length > 0 || !!page.fallbackTitle;
+              const hasChildren = page.items.length > 0;
 
               return (
                 <div key={page.pageIndex} className="flex flex-col gap-0.5">
@@ -170,38 +169,38 @@ export function SessionOutlineSidebar({
                   </button>
 
                   {hasChildren ? (
-                    <div className="mb-1 flex flex-col gap-0.5 pl-2 pr-1">
-                      {page.entries.length > 0
-                        ? page.entries.map((entry) => (
-                            <button
-                              key={`${page.pageIndex}-${entry.slug}-${entry.text}`}
-                              type="button"
-                              disabled={!interactive}
-                              onClick={() =>
-                                handleSelect(page.pageIndex, entry.slug)
-                              }
-                              className={cn(
-                                "w-full rounded-md px-2 py-1 text-left transition",
-                                entryIndent(entry.level),
-                                entryTextClass(entry.level),
-                                interactive &&
-                                  "cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-900/60",
-                                !interactive && "cursor-default",
-                              )}
-                            >
-                              <span className="line-clamp-2">{entry.text}</span>
-                            </button>
-                          ))
-                        : page.fallbackTitle ? (
-                            <p
-                              className={cn(
-                                "px-2 py-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400",
-                                !interactive && "cursor-default",
-                              )}
-                            >
-                              {page.fallbackTitle}
-                            </p>
-                          ) : null}
+                    <div className="mb-1 flex w-full min-w-0 max-w-full flex-col gap-0.5 overflow-x-hidden pl-2 pr-3">
+                      {page.items.map((item, itemIndex) =>
+                        item.kind === "userPrompt" ? (
+                          <p
+                            key={`${page.pageIndex}-prompt-${itemIndex}`}
+                            className="w-full min-w-0 max-w-full truncate rounded-md px-2 py-0.5 text-[10px] leading-snug text-zinc-500 ring-1 ring-inset ring-blue-500/40 dark:text-zinc-400"
+                          >
+                            {item.text}
+                          </p>
+                        ) : (
+                          <button
+                            key={`${page.pageIndex}-${item.entry.slug}-${item.entry.text}-${itemIndex}`}
+                            type="button"
+                            disabled={!interactive}
+                            onClick={() =>
+                              handleSelect(page.pageIndex, item.entry.slug)
+                            }
+                            className={cn(
+                              "w-full min-w-0 max-w-full overflow-hidden rounded-md px-2 py-1 text-left transition",
+                              entryIndent(item.entry.level),
+                              entryTextClass(item.entry.level),
+                              interactive &&
+                                "cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-900/60",
+                              !interactive && "cursor-default",
+                            )}
+                          >
+                            <span className="block max-w-full break-words whitespace-normal">
+                              {item.entry.text}
+                            </span>
+                          </button>
+                        ),
+                      )}
                     </div>
                   ) : null}
                 </div>

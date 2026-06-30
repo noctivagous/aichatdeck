@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useKeybindings } from "@/hooks/useKeybindings";
 import type { Keybinding } from "@/lib/keybindings/types";
@@ -18,7 +19,7 @@ import { Minimap } from "./Minimap";
 import { Composer } from "./Composer";
 import { ScrollShortcutHint } from "./ScrollShortcutHint";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { totalTokens } from "@/lib/tokens";
 import { slideEdgeGutter } from "@/lib/page-width";
 import { formatShortcut, keyBadgeClass } from "@/lib/keybindings/match";
@@ -29,6 +30,7 @@ import {
 import type { PageColumnCount } from "@/lib/page-columns";
 import type { ReplyFontScaleId } from "@/lib/reply-font-size";
 import type { ReplyLineHeightId } from "@/lib/reply-line-height";
+import { pushWithViewTransition } from "@/lib/view-transition-nav";
 type SlidesTrackProps = {
   pages: PageView[];
   pageWidth: number;
@@ -48,6 +50,8 @@ type SlidesTrackProps = {
   onFocusedPageChange: (index: number) => void;
   centerNewPages: boolean;
   onCenterNewPagesChange: (enabled: boolean) => void;
+  autoFollowLiveReply: boolean;
+  onAutoFollowLiveReplyChange: (enabled: boolean) => void;
 };
 
 export type SlidesTrackHandle = {
@@ -74,6 +78,8 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   onFocusedPageChange,
   centerNewPages,
   onCenterNewPagesChange,
+  autoFollowLiveReply,
+  onAutoFollowLiveReplyChange,
 }, ref) {
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -525,6 +531,10 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
 
   useKeybindings("chat", chatBindings);
 
+  const goBackToMainMenu = useCallback(() => {
+    pushWithViewTransition(router, "/", "back");
+  }, [router]);
+
   const allMessages = pages.flatMap((page) => page.messages);
   const tokenTotal = totalTokens(allMessages);
 
@@ -538,10 +548,34 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
           <div className="flex h-full w-max min-w-full items-center gap-5 md:gap-8">
             <div className="shrink-0" style={{ width: edgeGutter }} aria-hidden />
             {currentIndex === 0 ? (
-              <div className="flex h-[min(680px,calc(100%-16px))] w-[11rem] shrink-0 items-start sm:w-[13rem]">
-                <aside
-                  className="pointer-events-none w-full rounded-xl border border-zinc-200/50 bg-white/40 px-3 py-2.5 text-[11px] leading-snug text-zinc-500 shadow-sm backdrop-blur-md dark:border-zinc-700/45 dark:bg-zinc-950/35 dark:text-zinc-400 sm:text-xs"
-                  aria-hidden
+              <div className="flex h-[min(680px,calc(100%-16px))] shrink-0 items-start gap-2">
+                <Button variant="outline" size="icon" className="shrink-0" asChild>
+                  <Link
+                    href="/"
+                    aria-label="Back to conversations"
+                    onClick={(event) => {
+                      if (
+                        event.defaultPrevented ||
+                        event.button !== 0 ||
+                        event.metaKey ||
+                        event.ctrlKey ||
+                        event.shiftKey ||
+                        event.altKey
+                      ) {
+                        return;
+                      }
+                      event.preventDefault();
+                      goBackToMainMenu();
+                    }}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <button
+                  type="button"
+                  onClick={goBackToMainMenu}
+                  className="w-[9rem] cursor-pointer rounded-xl border border-zinc-200/50 bg-white/40 px-3 py-2.5 text-left text-[11px] leading-snug text-zinc-500 shadow-sm backdrop-blur-md transition-colors hover:border-zinc-300/80 hover:bg-white/75 hover:text-zinc-700 hover:shadow-md dark:border-zinc-700/45 dark:bg-zinc-950/35 dark:text-zinc-400 dark:hover:border-zinc-600/70 dark:hover:bg-zinc-950/65 dark:hover:text-zinc-300 sm:w-[11rem] sm:text-xs"
+                  aria-label="Return to the main menu"
                 >
                   Press{" "}
                   <kbd className={keyBadgeClass}>
@@ -552,7 +586,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
                     {formatShortcut("alt+m")}
                   </kbd>{" "}
                   to return to the main menu.
-                </aside>
+                </button>
               </div>
             ) : null}
             {pages.map((page) => (
@@ -572,6 +606,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
                     ? streamingMessageId
                     : undefined
                 }
+                autoFollowLiveReply={autoFollowLiveReply}
                 onFocus={() => focusPage(page.index, true)}
                 onHoverStart={() => setHoveredSlideIndex(page.index)}
                 onHoverEnd={() =>
@@ -660,6 +695,8 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
             onChange={onComposerChange}
             centerNewPages={centerNewPages}
             onCenterNewPagesChange={onCenterNewPagesChange}
+            autoFollowLiveReply={autoFollowLiveReply}
+            onAutoFollowLiveReplyChange={onAutoFollowLiveReplyChange}
             onFocusChange={setComposerFocused}
             onSend={() => {
               if (hasLivePage && !isLive) focusPage(livePageIndex, true);

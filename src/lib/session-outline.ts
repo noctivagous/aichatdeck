@@ -8,13 +8,18 @@ export type OutlineEntry = {
   slug: string;
 };
 
+export type OutlineItem =
+  | { kind: "userPrompt"; text: string }
+  | { kind: "heading"; entry: OutlineEntry };
+
 export type OutlinePage = {
   pageIndex: number;
   label: string;
   sealed: boolean;
   messageCount: number;
   entries: OutlineEntry[];
-  fallbackTitle?: string;
+  /** Sidebar rows in source order (user prompts + assistant headings). */
+  items: OutlineItem[];
 };
 
 export type SessionOutline = {
@@ -165,18 +170,27 @@ export function buildMessageHeadingSlugPlan(
   return plan;
 }
 
-function firstUserSnippet(page: PageView): string | undefined {
-  const userMsg = page.messages.find((m) => m.role === "user");
-  if (!userMsg) return undefined;
-  const text = trimSnippet(messageText(userMsg));
-  return text || undefined;
-}
-
 function buildOutlinePage(page: PageView): OutlinePage {
   const iterator = createHeadingSlugIterator();
-  const entries = page.messages
-    .filter((message) => message.role === "assistant")
-    .flatMap((message) => entriesFromAssistantMessage(message, iterator));
+  const entries: OutlineEntry[] = [];
+  const items: OutlineItem[] = [];
+
+  for (const message of page.messages) {
+    if (message.role === "user") {
+      const text = trimSnippet(messageText(message));
+      if (text) {
+        items.push({ kind: "userPrompt", text });
+      }
+      continue;
+    }
+
+    if (message.role !== "assistant") continue;
+    const messageEntries = entriesFromAssistantMessage(message, iterator);
+    for (const entry of messageEntries) {
+      entries.push(entry);
+      items.push({ kind: "heading", entry });
+    }
+  }
 
   return {
     pageIndex: page.index,
@@ -184,7 +198,7 @@ function buildOutlinePage(page: PageView): OutlinePage {
     sealed: page.sealed,
     messageCount: page.messages.length,
     entries,
-    fallbackTitle: entries.length === 0 ? firstUserSnippet(page) : undefined,
+    items,
   };
 }
 
