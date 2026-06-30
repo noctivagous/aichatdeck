@@ -257,11 +257,21 @@ export function ConversationList() {
   };
 
   return (
-    <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col px-4 py-8">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">AIChatDeck</h1>
+    <div className="flex h-[100dvh] flex-col">
+      <header className="z-40 flex h-[60px] shrink-0 items-center gap-3 border-b border-zinc-200/70 bg-white/80 px-4 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/70 md:px-6">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-[0_4px_12px_-4px_rgba(37,99,235,0.5)]">
+              💬
+            </div>
+            <div className="min-w-0">
+              <h1 className="truncate text-[15px] font-semibold leading-none tracking-tight">
+                AIChatDeck
+              </h1>
+              <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                horizontal pages for long AI conversations
+              </p>
+            </div>
             <div
               className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-900"
               role="group"
@@ -295,67 +305,67 @@ export function ConversationList() {
               </button>
             </div>
           </div>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Horizontal pages for long AI conversations
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Export database"
-            title="Export database"
-            disabled={exporting}
-            onClick={() => void handleExport()}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" asChild>
-            <Link href="/settings" aria-label="Settings">
-              <Settings className="h-4 w-4" />
-            </Link>
-          </Button>
-          <Button onClick={() => void handleNew()}>
-            <Plus className="h-4 w-4" />
-            New chat
-          </Button>
-        </div>
-      </div>
 
-      {viewMode === "list" ? (
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:gap-0 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <ScrollArea className="min-h-[320px] rounded-xl border border-zinc-200 dark:border-zinc-800 lg:min-h-0">
-            <div
-              ref={listRef}
-              className="divide-y divide-zinc-200 dark:divide-zinc-800"
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Export database"
+              title="Export database"
+              disabled={exporting}
+              onClick={() => void handleExport()}
             >
-              {renderConversationItems("list")}
-            </div>
-          </ScrollArea>
-
-          <SessionOutlineSidebar
-            mode="interactive"
-            outline={selectedOutline}
-            onSelectPage={handleOutlineNavigate}
-            className="min-h-[280px] rounded-xl border border-zinc-200 dark:border-zinc-800 lg:min-h-0 lg:border-r-0"
-          />
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" asChild>
+              <Link href="/settings" aria-label="Settings">
+                <Settings className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button size="sm" onClick={() => void handleNew()}>
+              <Plus className="h-4 w-4" />
+              New chat
+            </Button>
+          </div>
         </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-4">
-          <ScrollArea className="rounded-xl border border-zinc-200 dark:border-zinc-800">
-            <div ref={listRef} className="flex w-max min-w-full gap-3 p-3">
-              {renderConversationItems("cards")}
-            </div>
-          </ScrollArea>
+      </header>
 
-          <SessionOutlineSidebar
-            mode="interactive"
-            outline={selectedOutline}
-            onSelectPage={handleOutlineNavigate}
-            className="min-h-[320px] w-full rounded-xl border border-zinc-200 dark:border-zinc-800"
-          />
-        </div>
-      )}
+      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-4 py-4 md:px-6">
+        {viewMode === "list" ? (
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:gap-0 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <ScrollArea className="min-h-[320px] rounded-xl border border-zinc-200 dark:border-zinc-800 lg:min-h-0">
+              <div
+                ref={listRef}
+                className="divide-y divide-zinc-200 dark:divide-zinc-800"
+              >
+                {renderConversationItems("list")}
+              </div>
+            </ScrollArea>
+
+            <SessionOutlineSidebar
+              mode="interactive"
+              outline={selectedOutline}
+              onSelectPage={handleOutlineNavigate}
+              className="min-h-[280px] rounded-xl border border-zinc-200 dark:border-zinc-800 lg:min-h-0 lg:border-r-0"
+            />
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col gap-4">
+            <ScrollArea className="h-[150px] shrink-0 rounded-xl border border-zinc-200 dark:border-zinc-800">
+              <div ref={listRef} className="flex h-full w-max min-w-full items-stretch gap-3 p-3">
+                {renderConversationItems("cards")}
+              </div>
+            </ScrollArea>
+
+            <SessionOutlineSidebar
+              mode="interactive"
+              outline={selectedOutline}
+              onSelectPage={handleOutlineNavigate}
+              className="min-h-[320px] w-full rounded-xl border border-zinc-200 dark:border-zinc-800"
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
