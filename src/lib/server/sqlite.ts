@@ -17,6 +17,23 @@ const WASM_PATH = path.join(
 let db: Database | null = null;
 let initPromise: Promise<Database> | null = null;
 let operationChain: Promise<unknown> = Promise.resolve();
+let lastLoadedMtime = 0;
+
+function getDiskMtime(): number {
+  try {
+    return fs.statSync(DB_PATH).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+function resetDatabase() {
+  if (db) {
+    db.close();
+    db = null;
+  }
+  initPromise = null;
+}
 
 function enqueue<T>(fn: () => T | Promise<T>): Promise<T> {
   const result = operationChain.then(fn) as Promise<T>;
@@ -70,6 +87,7 @@ function migrateSchema(database: Database) {
 function persist(database: Database) {
   fs.mkdirSync(DB_DIR, { recursive: true });
   fs.writeFileSync(DB_PATH, Buffer.from(database.export()));
+  lastLoadedMtime = getDiskMtime();
 }
 
 export function getDbPath() {
@@ -77,6 +95,11 @@ export function getDbPath() {
 }
 
 async function openDatabase(): Promise<Database> {
+  const diskMtime = getDiskMtime();
+  if (db && diskMtime > lastLoadedMtime) {
+    resetDatabase();
+  }
+
   if (db) return db;
 
   if (!initPromise) {
@@ -92,6 +115,7 @@ async function openDatabase(): Promise<Database> {
       initSchema(database);
       persist(database);
       db = database;
+      lastLoadedMtime = getDiskMtime();
       return database;
     })();
   }
