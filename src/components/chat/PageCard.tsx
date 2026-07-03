@@ -23,6 +23,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreVertical, Trash2 } from "lucide-react";
 
 type PageCardProps = {
   page: PageView;
@@ -41,6 +49,8 @@ type PageCardProps = {
   onHoverEnd?: () => void;
   onSealChange?: (sealed: boolean) => void;
   canSeal?: boolean;
+  onDelete?: () => void;
+  canDelete?: boolean;
 };
 
 const SECTION_LABEL_MAX_LENGTH = 42;
@@ -69,6 +79,8 @@ export const PageCard = memo(function PageCard({
   onHoverEnd,
   onSealChange,
   canSeal = false,
+  onDelete,
+  canDelete = false,
 }: PageCardProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const pinnedToBottomRef = useRef(true);
@@ -333,7 +345,34 @@ export const PageCard = memo(function PageCard({
             <span className="text-[11px] text-zinc-500">
               ~{(page.tokenEstimate / 1000).toFixed(1)}k
             </span>
-
+            {onDelete ? (
+              <div onClick={(event) => event.stopPropagation()}>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`${page.label} options`}
+                      disabled={!canDelete}
+                      className="h-7 w-7 shrink-0 text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+                    >
+                      <MoreVertical className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[10rem]">
+                    <DropdownMenuItem
+                      disabled={!canDelete}
+                      className="gap-2 text-[13px] text-red-600 focus:bg-red-50 focus:text-red-600 dark:text-red-400 dark:focus:bg-red-950/40 dark:focus:text-red-400"
+                      onSelect={() => onDelete()}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete page
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -399,6 +438,8 @@ export const PageCard = memo(function PageCard({
     prev.composerFocused === next.composerFocused &&
     prev.autoFollowLiveReply === next.autoFollowLiveReply &&
     prev.canSeal === next.canSeal &&
-    prev.onSealChange === next.onSealChange
+    prev.onSealChange === next.onSealChange &&
+    prev.canDelete === next.canDelete &&
+    prev.onDelete === next.onDelete
   );
 });

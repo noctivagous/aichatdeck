@@ -32,6 +32,7 @@ import { DEFAULT_COUNTING_TYPE } from "@/lib/counting-types";
 import {
   computePageMessageRanges,
   computePages,
+  deletePage,
   liveItemCount,
   maybeAutoSealActivePage,
   normalizeConversationPageState,
@@ -542,6 +543,46 @@ export function ChatSession({
     [],
   );
 
+  const handlePageDelete = useCallback(
+    (pageIndex: number) => {
+      if (isStreaming && composePageIndex === pageIndex) {
+        toast.error("Stop the reply before deleting this page");
+        return;
+      }
+
+      const result = deletePage(
+        pageIndex,
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+        activePageIndexRef.current,
+        focusedPageRef.current,
+      );
+
+      if (!result) {
+        toast.error("Can't delete the only page");
+        return;
+      }
+
+      messagesRef.current = result.messages;
+      pageBreaksRef.current = result.pageBreaks;
+      sealedPageIndicesRef.current = result.sealedPageIndices;
+      activePageIndexRef.current = result.activePageIndex;
+      focusedPageRef.current = result.focusedPageIndex;
+
+      setMessages(result.messages);
+      setPageBreaks(result.pageBreaks);
+      setSealedPageIndices(result.sealedPageIndices);
+      setActivePageIndex(result.activePageIndex);
+      setFocusedPageIndex(result.focusedPageIndex);
+      slidesTrackRef.current?.focusPage(result.focusedPageIndex);
+
+      void flushPersist();
+      toast.success("Page deleted");
+    },
+    [composePageIndex, flushPersist, isStreaming, setMessages],
+  );
+
   const handlePageSealChange = useCallback(
     (pageIndex: number, sealed: boolean) => {
       const pageCount = computePages(
@@ -787,6 +828,7 @@ export function ChatSession({
           autoFollowLiveReply={autoFollowLiveReply}
           autoFocusComposer={initialMessages.length === 0}
           onPageSealChange={handlePageSealChange}
+          onPageDelete={handlePageDelete}
         />
       </div>
       </div>

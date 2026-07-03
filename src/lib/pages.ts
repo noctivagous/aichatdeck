@@ -337,6 +337,77 @@ function findFirstUnsealedIndex(
   return -1;
 }
 
+export type DeletePageResult = {
+  messages: UIMessage[];
+  pageBreaks: number[];
+  sealedPageIndices: number[];
+  activePageIndex: number;
+  focusedPageIndex: number;
+};
+
+export function deletePage(
+  pageIndex: number,
+  messages: UIMessage[],
+  pageBreaks: number[] = [],
+  sealedPageIndices: number[] = [],
+  activePageIndex = 0,
+  focusedPageIndex = 0,
+): DeletePageResult | null {
+  const pages = computePages(messages, pageBreaks, sealedPageIndices);
+  if (pages.length <= 1) return null;
+
+  const ranges = computePageMessageRanges(
+    messages,
+    pageBreaks,
+    sealedPageIndices,
+  );
+  const range = ranges[pageIndex];
+  if (!range || range.endIndex < range.startIndex) return null;
+
+  const deleteCount = range.endIndex - range.startIndex + 1;
+  const nextMessages = [
+    ...messages.slice(0, range.startIndex),
+    ...messages.slice(range.endIndex + 1),
+  ];
+
+  const legacyBreaks = pageBreaks
+    .filter((value) => value < range.startIndex || value > range.endIndex)
+    .map((value) => (value > range.endIndex ? value - deleteCount : value));
+  const nextBreaks = materializePageBreaks(nextMessages, legacyBreaks);
+
+  const sealedIndices = pages
+    .map((page, index) => (page.sealed ? index : -1))
+    .filter((index) => index >= 0);
+  const nextSealed = sealedIndices
+    .filter((index) => index !== pageIndex)
+    .map((index) => (index > pageIndex ? index - 1 : index));
+
+  const nextPageCount = computePages(
+    nextMessages,
+    nextBreaks,
+    nextSealed,
+  ).length;
+
+  const clampIndex = (index: number) =>
+    Math.max(0, Math.min(index, nextPageCount - 1));
+
+  let nextActive = activePageIndex;
+  if (pageIndex < activePageIndex) nextActive -= 1;
+  else if (pageIndex === activePageIndex) nextActive = clampIndex(pageIndex);
+
+  let nextFocused = focusedPageIndex;
+  if (pageIndex < focusedPageIndex) nextFocused -= 1;
+  else if (pageIndex === focusedPageIndex) nextFocused = clampIndex(pageIndex);
+
+  return {
+    messages: nextMessages,
+    pageBreaks: nextBreaks,
+    sealedPageIndices: nextSealed,
+    activePageIndex: clampIndex(nextActive),
+    focusedPageIndex: clampIndex(nextFocused),
+  };
+}
+
 export function setPageSealState(
   pageIndex: number,
   sealed: boolean,

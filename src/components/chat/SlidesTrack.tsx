@@ -61,6 +61,7 @@ type SlidesTrackProps = {
   autoFollowLiveReply: boolean;
   autoFocusComposer?: boolean;
   onPageSealChange?: (pageIndex: number, sealed: boolean) => void;
+  onPageDelete?: (pageIndex: number) => void;
 };
 
 export type SlidesTrackHandle = {
@@ -89,6 +90,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   autoFollowLiveReply,
   autoFocusComposer = false,
   onPageSealChange,
+  onPageDelete,
 }, ref) {
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -656,6 +658,11 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
                 onSealChange={(sealed) =>
                   onPageSealChange?.(page.index, sealed)
                 }
+                canDelete={
+                  pages.length > 1 &&
+                  !(isStreaming && composePageIndex === page.index)
+                }
+                onDelete={() => onPageDelete?.(page.index)}
               />
             ))}
             <div className="shrink-0" style={{ width: edgeGutter }} aria-hidden />
