@@ -31,6 +31,7 @@ import type { PageColumnCount } from "@/lib/page-columns";
 import type { ReplyFontScaleId } from "@/lib/reply-font-size";
 import type { ReplyLineHeightId } from "@/lib/reply-line-height";
 import { pushWithViewTransition } from "@/lib/view-transition-nav";
+import { useSlideBackGesture } from "@/hooks/useSlideBackGesture";
 type SlidesTrackProps = {
   pages: PageView[];
   pageWidth: number;
@@ -424,6 +425,10 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
     scrollSlideContent(direction * viewport.clientHeight);
   }, [scrollSlideContent]);
 
+  const goBackToMainMenu = useCallback(() => {
+    pushWithViewTransition(router, "/", "back");
+  }, [router]);
+
   const chatBindings = useMemo<Keybinding[]>(
     () => [
       {
@@ -432,7 +437,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
         scope: "chat",
         sequence: "arrowleft",
         when: () => currentIndexRef.current === 0,
-        handler: () => router.push("/"),
+        handler: () => goBackToMainMenu(),
       },
       {
         id: "slide-prev",
@@ -533,14 +538,16 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
         handler: () => scrollSlideContentByPage(1),
       },
     ],
-    [focusPage, pages.length, router, scrollSlideContent, scrollSlideContentByPage],
+    [focusPage, goBackToMainMenu, pages.length, scrollSlideContent, scrollSlideContentByPage],
   );
 
   useKeybindings("chat", chatBindings);
 
-  const goBackToMainMenu = useCallback(() => {
-    pushWithViewTransition(router, "/", "back");
-  }, [router]);
+  useSlideBackGesture({
+    wrapRef,
+    currentIndexRef,
+    onBack: goBackToMainMenu,
+  });
 
   const allMessages = pages.flatMap((page) => page.messages);
   const tokenTotal = totalTokens(allMessages);
