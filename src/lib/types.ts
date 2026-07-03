@@ -52,8 +52,12 @@ export type ConversationRecord = {
   title: string;
   modelId: string;
   messages: UIMessage[];
-  /** Index of the last message on each manually sealed page. */
+  /** Last message index for each page except the final page. */
   pageBreaks: number[];
+  /** Page indices that are sealed (all others are open for editing). */
+  sealedPageIndices: number[];
+  /** Page that receives new prompts and replies. */
+  activePageIndex: number;
   /** Last horizontally focused slide index in this conversation. */
   focusedPageIndex: number;
   createdAt: number;

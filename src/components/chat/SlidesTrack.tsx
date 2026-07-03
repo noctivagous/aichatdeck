@@ -20,6 +20,14 @@ import { Composer, type ComposerHandle } from "./Composer";
 import { ScrollShortcutHint } from "./ScrollShortcutHint";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  countItems,
+  DEFAULT_COUNTING_TYPE,
+} from "@/lib/counting-types";
+import {
+  hasComposeTarget,
+  resolveComposePageIndex,
+} from "@/lib/pages";
 import { totalTokens } from "@/lib/tokens";
 import { slideEdgeGutter } from "@/lib/page-width";
 import { formatShortcut, keyBadgeClass } from "@/lib/keybindings/match";
@@ -52,6 +60,7 @@ type SlidesTrackProps = {
   centerNewPages: boolean;
   autoFollowLiveReply: boolean;
   autoFocusComposer?: boolean;
+  onPageSealChange?: (pageIndex: number, sealed: boolean) => void;
 };
 
 export type SlidesTrackHandle = {
@@ -79,6 +88,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   centerNewPages,
   autoFollowLiveReply,
   autoFocusComposer = false,
+  onPageSealChange,
 }, ref) {
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -147,9 +157,16 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
     if (target) scrollSlideToCenter(wrap, target, false);
   }, [edgeGutter, pages.length, scrollSlideToCenter]);
 
-  const livePageIndex = pages.findIndex((page) => !page.sealed);
-  const hasLivePage = livePageIndex >= 0;
-  const isLive = hasLivePage && currentIndex === livePageIndex;
+  const lastPageIndex = Math.max(0, pages.length - 1);
+  const lastPage = pages[lastPageIndex];
+  const isOnLastPage = pages.length > 0 && currentIndex === lastPageIndex;
+
+  const composePageIndex = resolveComposePageIndex(currentIndex, pages);
+  const composePage =
+    composePageIndex >= 0 ? pages[composePageIndex] : undefined;
+  const canCompose = hasComposeTarget(currentIndex, pages);
+  const isOnComposePage =
+    composePageIndex >= 0 && currentIndex === composePageIndex;
 
   const blurComposer = useCallback(() => {
     composerRef.current?.blur();
@@ -163,7 +180,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
       setCurrentIndex(clamped);
       currentIndexRef.current = clamped;
       onFocusedPageChange(clamped);
-      if (hasLivePage && clamped === livePageIndex) setUnseenCount(0);
+      if (clamped === lastPageIndex) setUnseenCount(0);
 
       const wrap = wrapRef.current;
       if (!wrap) return;
@@ -178,9 +195,8 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
       }
     },
     [
-      hasLivePage,
       isSlideCentered,
-      livePageIndex,
+      lastPageIndex,
       onFocusedPageChange,
       pages.length,
       scrollSlideToCenter,
@@ -260,21 +276,27 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
     [focusPageWithHeading],
   );
 
-  const liveMessageCount = hasLivePage
-    ? (pages[livePageIndex]?.messages.length ?? 0)
+  const composeItemCount = canCompose
+    ? countItems(composePage?.messages ?? [], DEFAULT_COUNTING_TYPE)
     : 0;
-  const prevLiveCount = useRef(liveMessageCount);
+  const lastPageItemCount = countItems(
+    lastPage?.messages ?? [],
+    DEFAULT_COUNTING_TYPE,
+  );
+  const prevLastPageCount = useRef(lastPageItemCount);
 
   useEffect(() => {
-    if (isLive) {
-      prevLiveCount.current = liveMessageCount;
+    if (isOnLastPage) {
+      prevLastPageCount.current = lastPageItemCount;
       return;
     }
-    if (hasLivePage && liveMessageCount > prevLiveCount.current) {
-      setUnseenCount((count) => count + (liveMessageCount - prevLiveCount.current));
+    if (lastPageItemCount > prevLastPageCount.current) {
+      setUnseenCount(
+        (count) => count + (lastPageItemCount - prevLastPageCount.current),
+      );
     }
-    prevLiveCount.current = liveMessageCount;
-  }, [hasLivePage, isLive, liveMessageCount]);
+    prevLastPageCount.current = lastPageItemCount;
+  }, [isOnLastPage, lastPageItemCount]);
 
   useEffect(() => {
     if (pages.length === 0) return;
@@ -297,10 +319,10 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   centerNewPagesRef.current = centerNewPages;
   const focusPageRef = useRef(focusPage);
   focusPageRef.current = focusPage;
-  const hasLivePageRef = useRef(hasLivePage);
-  hasLivePageRef.current = hasLivePage;
-  const livePageIndexRef = useRef(livePageIndex);
-  livePageIndexRef.current = livePageIndex;
+  const canComposeRef = useRef(canCompose);
+  canComposeRef.current = canCompose;
+  const composePageIndexRef = useRef(composePageIndex);
+  composePageIndexRef.current = composePageIndex;
 
   useEffect(() => {
     const pageCountIncreased = pages.length > prevPageCountRef.current;
@@ -316,13 +338,13 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
 
     if (
       pendingCenterNewPage.current &&
-      hasLivePageRef.current &&
-      liveMessageCount > 0
+      canComposeRef.current &&
+      composeItemCount > 0
     ) {
-      focusPageRef.current(livePageIndexRef.current, true);
+      focusPageRef.current(composePageIndexRef.current, true);
       pendingCenterNewPage.current = false;
     }
-  }, [pages.length, liveMessageCount]);
+  }, [pages.length, composeItemCount]);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -611,12 +633,14 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
                 columnCount={columnCount}
                 fontScale={fontScale}
                 lineHeight={lineHeight}
-                isLive={hasLivePage && page.index === livePageIndex}
+                isLive={composePageIndex === page.index}
                 isFocused={currentIndex === page.index}
                 composerFocused={composerFocused}
-                isStreaming={isStreaming && hasLivePage && page.index === livePageIndex}
+                isStreaming={
+                  isStreaming && composePageIndex === page.index
+                }
                 streamingMessageId={
-                  hasLivePage && page.index === livePageIndex
+                  composePageIndex === page.index
                     ? streamingMessageId
                     : undefined
                 }
@@ -627,6 +651,10 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
                   setHoveredSlideIndex((current) =>
                     current === page.index ? null : current,
                   )
+                }
+                canSeal={!page.sealed}
+                onSealChange={(sealed) =>
+                  onPageSealChange?.(page.index, sealed)
                 }
               />
             ))}
@@ -655,16 +683,16 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
           <ChevronRight className="h-5 w-5" />
         </Button>
 
-        {hasLivePage && !isLive ? (
+        {!isOnLastPage && pages.length > 1 ? (
           <button
             type="button"
-            onClick={() => focusPage(livePageIndex, true, true)}
+            onClick={() => focusPage(lastPageIndex, true, true)}
             className="absolute bottom-6 right-4 z-30 flex h-10 items-center gap-1.5 rounded-full bg-zinc-900 px-3.5 text-[13px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] transition hover:translate-y-[-1px] dark:bg-white dark:text-zinc-900 md:right-6"
           >
             <span>
               {unseenCount > 0
-                ? `Jump to Live • ${unseenCount} new`
-                : "Jump to Live"}
+                ? `Jump to Last • ${unseenCount} new`
+                : "Jump to Last"}
             </span>
             <svg
               width="14"
@@ -694,7 +722,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {!isLive && unseenCount > 0 ? (
+            {!isOnLastPage && unseenCount > 0 ? (
               <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-medium text-white">
                 {unseenCount} new
               </span>
@@ -713,9 +741,12 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
             onFocusChange={setComposerFocused}
             autoFocus={autoFocusComposer}
             onSend={() => {
-              if (hasLivePage && !isLive) focusPage(livePageIndex, true);
+              if (canCompose && !isOnComposePage) {
+                focusPage(composePageIndex, true);
+              }
               onSend();
             }}
+            disabled={disabled || !canCompose}
             onSendToNewPage={() => {
               if (centerNewPages) pendingCenterNewPage.current = true;
               onSendToNewPage?.();
@@ -723,7 +754,6 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
             onStop={onStop}
             onAttach={onAttach}
             isStreaming={isStreaming}
-            disabled={disabled}
           />
         </div>
       </footer>

@@ -24,7 +24,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { computePages, liveMessageCount } from "@/lib/pages";
+import {
+  sendToActivePage,
+  shouldAppendToActivePage,
+} from "@/lib/active-page-send";
+import { DEFAULT_COUNTING_TYPE } from "@/lib/counting-types";
+import {
+  computePageMessageRanges,
+  computePages,
+  liveItemCount,
+  maybeAutoSealActivePage,
+  normalizeConversationPageState,
+  resolveComposePageIndex,
+  sealActivePageBeforeNewPage,
+  setPageSealState,
+} from "@/lib/pages";
 import {
   getConversation,
   conversationTitleFromMessages,
@@ -55,6 +69,8 @@ type ChatSessionProps = {
   initialModelId: string;
   initialMessages: UIMessage[];
   initialPageBreaks?: number[];
+  initialSealedPageIndices?: number[];
+  initialActivePageIndex?: number;
   initialFocusedPageIndex?: number;
   initialNavigateTo?: ChatNavigateTarget | null;
 };
@@ -77,9 +93,17 @@ export function ChatSession({
   initialModelId,
   initialMessages,
   initialPageBreaks = [],
+  initialSealedPageIndices,
+  initialActivePageIndex,
   initialFocusedPageIndex = 0,
   initialNavigateTo = null,
 }: ChatSessionProps) {
+  const initialPageState = normalizeConversationPageState(
+    initialMessages,
+    initialPageBreaks,
+    initialSealedPageIndices,
+    initialActivePageIndex,
+  );
   const router = useRouter();
   const { settings, hydrated, reload } = useHydratedSettings();
   const { pageWidth, setPreviewWidth, commitWidth } = usePageWidth();
@@ -94,7 +118,16 @@ export function ChatSession({
   const [modelId, setModelId] = useState(initialModelId);
   const [input, setInput] = useState("");
   const [title, setTitle] = useState(initialTitle);
-  const [pageBreaks, setPageBreaks] = useState<number[]>(initialPageBreaks);
+  const [pageBreaks, setPageBreaks] = useState<number[]>(
+    initialPageState.pageBreaks,
+  );
+  const [sealedPageIndices, setSealedPageIndices] = useState<number[]>(
+    initialPageState.sealedPageIndices,
+  );
+  const [activePageIndex, setActivePageIndex] = useState(
+    initialPageState.activePageIndex,
+  );
+  const [insertStreaming, setInsertStreaming] = useState(false);
   const [focusedPageIndex, setFocusedPageIndex] = useState(
     initialFocusedPageIndex,
   );
@@ -134,28 +167,62 @@ export function ChatSession({
   });
 
   const pages = useMemo(
-    () => computePages(messages, pageBreaks),
-    [messages, pageBreaks],
+    () => computePages(messages, pageBreaks, sealedPageIndices),
+    [messages, pageBreaks, sealedPageIndices],
   );
   const outline = useMemo(
     () => buildSessionOutline(title, pages),
     [title, pages],
   );
-  const isStreaming = status === "streaming" || status === "submitted";
-  const canStartNewPage = liveMessageCount(messages, pageBreaks) > 0;
+  const isStreaming =
+    status === "streaming" || status === "submitted" || insertStreaming;
+  const composePageIndex = useMemo(
+    () => resolveComposePageIndex(focusedPageIndex, pages),
+    [focusedPageIndex, pages],
+  );
+
+  const canStartNewPage =
+    composePageIndex >= 0 &&
+    liveItemCount(
+      messages,
+      pageBreaks,
+      DEFAULT_COUNTING_TYPE,
+      sealedPageIndices,
+      composePageIndex,
+    ) > 0;
   const streamingMessageId = useMemo(() => {
-    if (!isStreaming) return undefined;
-    const last = messages[messages.length - 1];
-    return last?.role === "assistant" ? last.id : undefined;
-  }, [isStreaming, messages]);
+    if (!isStreaming || composePageIndex < 0) return undefined;
+
+    const ranges = computePageMessageRanges(
+      messages,
+      pageBreaks,
+      sealedPageIndices,
+    );
+    const range = ranges[composePageIndex];
+    if (!range || range.endIndex < range.startIndex) {
+      const last = messages[messages.length - 1];
+      return last?.role === "assistant" ? last.id : undefined;
+    }
+
+    for (let index = range.endIndex; index >= range.startIndex; index -= 1) {
+      const message = messages[index];
+      if (message?.role === "assistant") return message.id;
+    }
+
+    return undefined;
+  }, [isStreaming, composePageIndex, messages, pageBreaks, sealedPageIndices]);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storageSyncCompleteRef = useRef(false);
   const pageBreaksRef = useRef(pageBreaks);
+  const sealedPageIndicesRef = useRef(sealedPageIndices);
+  const activePageIndexRef = useRef(activePageIndex);
   const modelIdRef = useRef(modelId);
   const messagesRef = useRef(messages);
   const focusedPageRef = useRef(focusedPageIndex);
   pageBreaksRef.current = pageBreaks;
+  sealedPageIndicesRef.current = sealedPageIndices;
+  activePageIndexRef.current = activePageIndex;
   modelIdRef.current = modelId;
   messagesRef.current = messages;
   focusedPageRef.current = focusedPageIndex;
@@ -166,7 +233,12 @@ export function ChatSession({
       if (currentMessages.length === 0) {
         return updateConversation(
           conversationId,
-          { focusedPageIndex: focusedPageRef.current },
+          {
+            focusedPageIndex: focusedPageRef.current,
+            activePageIndex: activePageIndexRef.current,
+            sealedPageIndices: sealedPageIndicesRef.current,
+            pageBreaks: pageBreaksRef.current,
+          },
           options,
         );
       }
@@ -181,6 +253,8 @@ export function ChatSession({
           title: nextTitle,
           modelId: modelIdRef.current,
           pageBreaks: pageBreaksRef.current,
+          sealedPageIndices: sealedPageIndicesRef.current,
+          activePageIndex: activePageIndexRef.current,
           focusedPageIndex: focusedPageRef.current,
         },
         options,
@@ -224,10 +298,28 @@ export function ChatSession({
           setMessages(latest.messages);
         }
 
-        const nextPageBreaks = latest.pageBreaks ?? [];
-        if (!areNumberArraysEqual(pageBreaksRef.current, nextPageBreaks)) {
-          pageBreaksRef.current = nextPageBreaks;
-          setPageBreaks(nextPageBreaks);
+        const nextPageState = normalizeConversationPageState(
+          latest.messages,
+          latest.pageBreaks ?? [],
+          latest.sealedPageIndices,
+          latest.activePageIndex,
+        );
+        if (!areNumberArraysEqual(pageBreaksRef.current, nextPageState.pageBreaks)) {
+          pageBreaksRef.current = nextPageState.pageBreaks;
+          setPageBreaks(nextPageState.pageBreaks);
+        }
+        if (
+          !areNumberArraysEqual(
+            sealedPageIndicesRef.current,
+            nextPageState.sealedPageIndices,
+          )
+        ) {
+          sealedPageIndicesRef.current = nextPageState.sealedPageIndices;
+          setSealedPageIndices(nextPageState.sealedPageIndices);
+        }
+        if (activePageIndexRef.current !== nextPageState.activePageIndex) {
+          activePageIndexRef.current = nextPageState.activePageIndex;
+          setActivePageIndex(nextPageState.activePageIndex);
         }
 
         const nextFocused = Math.max(0, latest.focusedPageIndex ?? 0);
@@ -266,6 +358,25 @@ export function ChatSession({
   }, [messages, isStreaming, flushPersist]);
 
   useEffect(() => {
+    if (isStreaming) return;
+
+    const nextState = maybeAutoSealActivePage(
+      messages,
+      pageBreaks,
+      sealedPageIndices,
+      composePageIndex,
+    );
+    if (!nextState) return;
+
+    pageBreaksRef.current = nextState.pageBreaks;
+    sealedPageIndicesRef.current = nextState.sealedPageIndices;
+    activePageIndexRef.current = nextState.activePageIndex;
+    setPageBreaks(nextState.pageBreaks);
+    setSealedPageIndices(nextState.sealedPageIndices);
+    setActivePageIndex(nextState.activePageIndex);
+  }, [messages, isStreaming, pageBreaks, sealedPageIndices, composePageIndex]);
+
+  useEffect(() => {
     const onPageHide = () => {
       if (!isStreaming) return;
       void flushPersist({ keepalive: true });
@@ -299,26 +410,101 @@ export function ChatSession({
     return true;
   }, [modelId, settings]);
 
+  const dispatchToComposePage = useCallback(
+    async ({
+      text,
+      files,
+    }: {
+      text: string;
+      files?: FileList;
+    }) => {
+      const currentPages = computePages(
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+      );
+      const targetPageIndex = resolveComposePageIndex(
+        focusedPageRef.current,
+        currentPages,
+      );
+
+      if (targetPageIndex < 0) {
+        toast.error("Unseal a page before sending a message");
+        return;
+      }
+
+      if (
+        shouldAppendToActivePage(
+          messagesRef.current,
+          pageBreaksRef.current,
+          sealedPageIndicesRef.current,
+          targetPageIndex,
+        )
+      ) {
+        sendMessage({ text, files });
+        return;
+      }
+
+      setInsertStreaming(true);
+      try {
+        await sendToActivePage({
+          text,
+          files,
+          messages: messagesRef.current,
+          pageBreaks: pageBreaksRef.current,
+          sealedPageIndices: sealedPageIndicesRef.current,
+          activePageIndex: targetPageIndex,
+          modelId: modelIdRef.current,
+          onMessagesChange: setMessages,
+          onPageBreaksChange: (nextPageBreaks) => {
+            pageBreaksRef.current = nextPageBreaks;
+            setPageBreaks(nextPageBreaks);
+          },
+        });
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          error.message !== "ACTIVE_PAGE_APPEND"
+        ) {
+          toast.error(
+            error instanceof Error ? error.message : "Failed to send message",
+          );
+        }
+      } finally {
+        setInsertStreaming(false);
+      }
+    },
+    [sendMessage, setMessages],
+  );
+
   const handleSend = useCallback(() => {
     const text = input.trim();
     if (!text || isStreaming) return;
     if (!ensureProviderReady()) return;
-    sendMessage({ text });
+    void dispatchToComposePage({ text });
     setInput("");
-  }, [input, isStreaming, ensureProviderReady, sendMessage]);
+  }, [input, isStreaming, ensureProviderReady, dispatchToComposePage]);
 
   const handleSendToNewPage = useCallback(() => {
     const text = input.trim();
     if (!text || isStreaming) return;
     if (!ensureProviderReady()) return;
 
-    if (canStartNewPage) {
-      const nextBreak = messages.length - 1;
-      if (!pageBreaks.includes(nextBreak)) {
-        const nextPageBreaks = [...pageBreaks, nextBreak].sort((a, b) => a - b);
-        pageBreaksRef.current = nextPageBreaks;
-        setPageBreaks(nextPageBreaks);
-      }
+    const targetPageIndex = resolveComposePageIndex(focusedPageIndex, pages);
+
+    if (canStartNewPage && targetPageIndex >= 0) {
+      const nextState = sealActivePageBeforeNewPage(
+        messages,
+        pageBreaks,
+        sealedPageIndices,
+        targetPageIndex,
+      );
+      pageBreaksRef.current = nextState.pageBreaks;
+      sealedPageIndicesRef.current = nextState.sealedPageIndices;
+      activePageIndexRef.current = nextState.activePageIndex;
+      setPageBreaks(nextState.pageBreaks);
+      setSealedPageIndices(nextState.sealedPageIndices);
+      setActivePageIndex(nextState.activePageIndex);
     }
 
     sendMessage({ text });
@@ -328,8 +514,11 @@ export function ChatSession({
     isStreaming,
     ensureProviderReady,
     canStartNewPage,
-    messages.length,
+    messages,
     pageBreaks,
+    sealedPageIndices,
+    focusedPageIndex,
+    pages,
     sendMessage,
   ]);
 
@@ -337,13 +526,13 @@ export function ChatSession({
     (files: FileList) => {
       if (isStreaming) return;
       if (!ensureProviderReady()) return;
-      sendMessage({
+      void dispatchToComposePage({
         text: input.trim() || "What is in this image?",
         files,
       });
       setInput("");
     },
-    [input, isStreaming, ensureProviderReady, sendMessage],
+    [input, isStreaming, ensureProviderReady, dispatchToComposePage],
   );
 
   const handleOutlineSelectPage = useCallback(
@@ -351,6 +540,47 @@ export function ChatSession({
       slidesTrackRef.current?.focusPage(index, headingSlug);
     },
     [],
+  );
+
+  const handlePageSealChange = useCallback(
+    (pageIndex: number, sealed: boolean) => {
+      const pageCount = computePages(
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+      ).length;
+      const next = setPageSealState(
+        pageIndex,
+        sealed,
+        sealedPageIndicesRef.current,
+        activePageIndexRef.current,
+        pageCount,
+      );
+
+      if (
+        areNumberArraysEqual(
+          sealedPageIndicesRef.current,
+          next.sealedPageIndices,
+        ) &&
+        activePageIndexRef.current === next.activePageIndex
+      ) {
+        return;
+      }
+
+      sealedPageIndicesRef.current = next.sealedPageIndices;
+      activePageIndexRef.current = next.activePageIndex;
+      setSealedPageIndices(next.sealedPageIndices);
+      setActivePageIndex(next.activePageIndex);
+
+      if (!sealed) {
+        focusedPageRef.current = pageIndex;
+        setFocusedPageIndex(pageIndex);
+        slidesTrackRef.current?.focusPage(pageIndex);
+      }
+
+      void flushPersist();
+    },
+    [flushPersist],
   );
 
   useEffect(() => {
@@ -556,6 +786,7 @@ export function ChatSession({
           centerNewPages={centerNewPages}
           autoFollowLiveReply={autoFollowLiveReply}
           autoFocusComposer={initialMessages.length === 0}
+          onPageSealChange={handlePageSealChange}
         />
       </div>
       </div>

@@ -1,4 +1,5 @@
 import type { PageView } from "@/lib/types";
+import { countItems, DEFAULT_COUNTING_TYPE } from "@/lib/counting-types";
 import { messageText } from "@/lib/tokens";
 import type { UIMessage } from "ai";
 
@@ -16,7 +17,8 @@ export type OutlinePage = {
   pageIndex: number;
   label: string;
   sealed: boolean;
-  messageCount: number;
+  /** Item count for the slide's counting type (default: Q&A). */
+  itemCount: number;
   entries: OutlineEntry[];
   /** Sidebar rows in source order (user prompts + assistant headings). */
   items: OutlineItem[];
@@ -68,11 +70,19 @@ function stripInlineMarkdown(text: string): string {
     .trim();
 }
 
-function extractHeadingCandidates(markdown: string): HeadingCandidate[] {
-  const entries: HeadingCandidate[] = [];
-  let openFence: { marker: "`" | "~"; length: number } | null = null;
+type HeadingCandidateWithOffset = HeadingCandidate & { offset: number };
 
-  for (const rawLine of markdown.split("\n")) {
+function walkMarkdownHeadingCandidates(
+  markdown: string,
+  withOffsets: boolean,
+): HeadingCandidate[] | HeadingCandidateWithOffset[] {
+  const entries: HeadingCandidateWithOffset[] = [];
+  let openFence: { marker: "`" | "~"; length: number } | null = null;
+  const lines = markdown.split("\n");
+  let offset = 0;
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const rawLine = lines[lineIndex]!;
     const line = rawLine.replace(/\r$/, "");
     const fenceMatch = /^\s{0,3}([`~]{3,})/.exec(line);
 
@@ -84,25 +94,45 @@ function extractHeadingCandidates(markdown: string): HeadingCandidate[] {
       } else if (marker === openFence.marker && fence.length >= openFence.length) {
         openFence = null;
       }
-      continue;
+    } else if (!openFence) {
+      const match = HEADING_RE.exec(line);
+      if (match) {
+        const level = match[1]!.length as 1 | 2 | 3;
+        const text = stripInlineMarkdown(
+          match[2]!
+            .replace(/\s+#+\s*$/, "")
+            .trim(),
+        );
+        if (text) {
+          entries.push(
+            withOffsets
+              ? { level, text, offset }
+              : { level, text, offset: 0 },
+          );
+        }
+      }
     }
 
-    if (openFence) continue;
-
-    const match = HEADING_RE.exec(line);
-    if (!match) continue;
-
-    const level = match[1]!.length as 1 | 2 | 3;
-    const text = stripInlineMarkdown(
-      match[2]!
-      .replace(/\s+#+\s*$/, "")
-      .trim(),
-    );
-    if (!text) continue;
-    entries.push({ level, text });
+    offset += rawLine.length;
+    if (lineIndex < lines.length - 1) offset += 1;
   }
 
-  return entries;
+  return withOffsets
+    ? entries
+    : entries.map(({ level, text }) => ({ level, text }));
+}
+
+function extractHeadingCandidates(markdown: string): HeadingCandidate[] {
+  return walkMarkdownHeadingCandidates(markdown, false) as HeadingCandidate[];
+}
+
+function extractHeadingCandidatesWithOffsets(
+  markdown: string,
+): HeadingCandidateWithOffset[] {
+  return walkMarkdownHeadingCandidates(
+    markdown,
+    true,
+  ) as HeadingCandidateWithOffset[];
 }
 
 function assistantMessageTextParts(message: UIMessage): string[] {
@@ -196,10 +226,54 @@ function buildOutlinePage(page: PageView): OutlinePage {
     pageIndex: page.index,
     label: page.label,
     sealed: page.sealed,
-    messageCount: page.messages.length,
+    itemCount: countItems(page.messages, DEFAULT_COUNTING_TYPE),
     entries,
     items,
   };
+}
+
+export function resolveMessageMatchSection(
+  page: PageView,
+  message: UIMessage,
+  charIndex: number,
+): { headingSlug?: string; sectionLabel: string } {
+  if (message.role === "user") {
+    const text = trimSnippet(messageText(message));
+    return { sectionLabel: text || "Your message" };
+  }
+
+  if (message.role !== "assistant") {
+    return { sectionLabel: "Message" };
+  }
+
+  const iterator = createHeadingSlugIterator();
+
+  for (const pageMessage of page.messages) {
+    if (pageMessage.role !== "assistant") continue;
+
+    const markdown = messageText(pageMessage);
+    const entries = iterator.entriesFromMarkdown(markdown);
+
+    if (pageMessage.id !== message.id) continue;
+
+    const candidates = extractHeadingCandidatesWithOffsets(markdown);
+    let resolved: { headingSlug: string; sectionLabel: string } | undefined;
+
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = candidates[index]!;
+      const entry = entries[index];
+      if (!entry || candidate.offset > charIndex) continue;
+      resolved = {
+        headingSlug: entry.slug,
+        sectionLabel: entry.text,
+      };
+    }
+
+    if (resolved) return resolved;
+    return { sectionLabel: "Assistant reply" };
+  }
+
+  return { sectionLabel: "Assistant reply" };
 }
 
 export function buildSessionOutline(

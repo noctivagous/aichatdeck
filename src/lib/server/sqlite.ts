@@ -82,6 +82,16 @@ function migrateSchema(database: Database) {
       `ALTER TABLE conversations ADD COLUMN focused_page_index INTEGER NOT NULL DEFAULT 0`,
     );
   }
+  if (!columns.some((column) => column.name === "sealed_page_indices")) {
+    database.run(
+      `ALTER TABLE conversations ADD COLUMN sealed_page_indices TEXT NOT NULL DEFAULT '[]'`,
+    );
+  }
+  if (!columns.some((column) => column.name === "active_page_index")) {
+    database.run(
+      `ALTER TABLE conversations ADD COLUMN active_page_index INTEGER NOT NULL DEFAULT 0`,
+    );
+  }
 }
 
 function persist(database: Database) {

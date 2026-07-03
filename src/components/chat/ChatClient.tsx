@@ -49,6 +49,8 @@ export function ChatClient({ conversationId }: ChatClientProps) {
       initialModelId={conversation.modelId}
       initialMessages={conversation.messages as UIMessage[]}
       initialPageBreaks={conversation.pageBreaks ?? []}
+      initialSealedPageIndices={conversation.sealedPageIndices}
+      initialActivePageIndex={conversation.activePageIndex}
       initialFocusedPageIndex={
         navigateTarget?.pageIndex ?? conversation.focusedPageIndex ?? 0
       }

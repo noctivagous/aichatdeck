@@ -9,6 +9,11 @@ import type { PageColumnCount } from "@/lib/page-columns";
 import type { ReplyFontScaleId } from "@/lib/reply-font-size";
 import type { ReplyLineHeightId } from "@/lib/reply-line-height";
 import { ScrollShortcutHint } from "./ScrollShortcutHint";
+import {
+  countItems,
+  DEFAULT_COUNTING_TYPE,
+  formatCountLabel,
+} from "@/lib/counting-types";
 import { messageText } from "@/lib/tokens";
 import { PageSlugPlanProvider } from "./heading-slug-context";
 import {
@@ -34,6 +39,8 @@ type PageCardProps = {
   onFocus?: () => void;
   onHoverStart?: () => void;
   onHoverEnd?: () => void;
+  onSealChange?: (sealed: boolean) => void;
+  canSeal?: boolean;
 };
 
 const SECTION_LABEL_MAX_LENGTH = 42;
@@ -60,6 +67,8 @@ export const PageCard = memo(function PageCard({
   onFocus,
   onHoverStart,
   onHoverEnd,
+  onSealChange,
+  canSeal = false,
 }: PageCardProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const pinnedToBottomRef = useRef(true);
@@ -224,9 +233,47 @@ export const PageCard = memo(function PageCard({
             <span className="shrink-0 rounded-full bg-zinc-900 px-2 py-0.5 text-[11px] font-medium text-white dark:bg-white dark:text-zinc-900">
               {page.label}
             </span>
-            <span className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
-              {page.sealed ? "Sealed" : "Live now"}
-            </span>
+            <div
+              role="group"
+              aria-label="Page seal state"
+              className="inline-flex shrink-0 rounded-md border border-zinc-200/80 bg-zinc-50/90 p-0.5 dark:border-zinc-700/80 dark:bg-zinc-800/70"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                aria-pressed={!page.sealed}
+                disabled={!page.sealed || !onSealChange}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSealChange?.(false);
+                }}
+                className={cn(
+                  "rounded-[5px] px-2 py-0.5 text-[10px] font-medium transition",
+                  !page.sealed
+                    ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-100"
+                    : "text-zinc-500 hover:text-zinc-700 disabled:cursor-default disabled:opacity-60 dark:text-zinc-400 dark:hover:text-zinc-200",
+                )}
+              >
+                Open
+              </button>
+              <button
+                type="button"
+                aria-pressed={page.sealed}
+                disabled={page.sealed || !canSeal || !onSealChange}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSealChange?.(true);
+                }}
+                className={cn(
+                  "rounded-[5px] px-2 py-0.5 text-[10px] font-medium transition",
+                  page.sealed
+                    ? "bg-emerald-500/15 text-emerald-700 shadow-sm dark:text-emerald-300"
+                    : "text-zinc-500 hover:text-zinc-700 disabled:cursor-default disabled:opacity-60 dark:text-zinc-400 dark:hover:text-zinc-200",
+                )}
+              >
+                Sealed
+              </button>
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
             {sections.length > 1 ? (
@@ -277,30 +324,16 @@ export const PageCard = memo(function PageCard({
               </span>
             ) : null}
             <span className="text-[11px] text-zinc-500">
-              {page.messages.length} msgs
+              {formatCountLabel(
+                countItems(page.messages, DEFAULT_COUNTING_TYPE),
+                DEFAULT_COUNTING_TYPE,
+              )}
             </span>
             <span className="h-1 w-1 rounded-full bg-zinc-300 dark:bg-zinc-700" />
             <span className="text-[11px] text-zinc-500">
               ~{(page.tokenEstimate / 1000).toFixed(1)}k
             </span>
-            {page.sealed ? (
-              <div
-                className="grid h-5 w-5 place-items-center rounded-full bg-emerald-500/10 text-emerald-600"
-                title="Page sealed"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                >
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
-              </div>
-            ) : null}
+
           </div>
         </div>
 
@@ -346,7 +379,9 @@ export const PageCard = memo(function PageCard({
     </article>
   );
 }, (prev, next) => {
-  if (next.isLive || next.isStreaming) return false;
+  if (next.isLive || next.isStreaming || next.page.sealed !== prev.page.sealed) {
+    return false;
+  }
 
   const prevLast = prev.page.messages[prev.page.messages.length - 1];
   const nextLast = next.page.messages[next.page.messages.length - 1];
@@ -362,6 +397,8 @@ export const PageCard = memo(function PageCard({
     prev.lineHeight === next.lineHeight &&
     prev.isFocused === next.isFocused &&
     prev.composerFocused === next.composerFocused &&
-    prev.autoFollowLiveReply === next.autoFollowLiveReply
+    prev.autoFollowLiveReply === next.autoFollowLiveReply &&
+    prev.canSeal === next.canSeal &&
+    prev.onSealChange === next.onSealChange
   );
 });

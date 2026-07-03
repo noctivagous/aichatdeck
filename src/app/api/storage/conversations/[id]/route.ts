@@ -30,7 +30,13 @@ export async function PATCH(req: Request, context: RouteContext) {
     const patch = (await req.json()) as Partial<
       Pick<
         ConversationRecord,
-        "title" | "modelId" | "messages" | "pageBreaks" | "focusedPageIndex"
+        | "title"
+        | "modelId"
+        | "messages"
+        | "pageBreaks"
+        | "sealedPageIndices"
+        | "activePageIndex"
+        | "focusedPageIndex"
       >
     >;
     const existing = await getConversation(id);

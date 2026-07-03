@@ -34,6 +34,8 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps) 
       initialModelId={record.modelId}
       initialMessages={record.messages as UIMessage[]}
       initialPageBreaks={record.pageBreaks ?? []}
+      initialSealedPageIndices={record.sealedPageIndices}
+      initialActivePageIndex={record.activePageIndex}
       initialFocusedPageIndex={navigateTarget?.pageIndex ?? record.focusedPageIndex ?? 0}
       initialNavigateTo={navigateTarget}
     />

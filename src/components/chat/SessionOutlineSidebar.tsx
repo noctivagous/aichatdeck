@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_COUNTING_TYPE,
+  formatCountLabel,
+} from "@/lib/counting-types";
 import type { OutlineEntry, SessionOutline } from "@/lib/session-outline";
 import { ArrowLeft, ListTree } from "lucide-react";
 import { pushWithViewTransition } from "@/lib/view-transition-nav";
@@ -162,7 +166,7 @@ export function SessionOutlineSidebar({
                         {page.label}
                       </span>
                       <span className="mt-0.5 block text-[10px] text-zinc-500">
-                        {page.messageCount} msg
+                        {formatCountLabel(page.itemCount, DEFAULT_COUNTING_TYPE)}
                         {page.sealed ? " · sealed" : " · live"}
                       </span>
                     </span>

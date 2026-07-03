@@ -45,7 +45,13 @@ export async function updateConversation(
   patch: Partial<
     Pick<
       ConversationRecord,
-      "title" | "modelId" | "messages" | "pageBreaks" | "focusedPageIndex"
+      | "title"
+      | "modelId"
+      | "messages"
+      | "pageBreaks"
+      | "sealedPageIndices"
+      | "activePageIndex"
+      | "focusedPageIndex"
     >
   >,
   options?: { keepalive?: boolean },
