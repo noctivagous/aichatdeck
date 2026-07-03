@@ -1,11 +1,23 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { LayoutTemplate, Paperclip, Send, Square } from "lucide-react";
 import { useKeybindings } from "@/hooks/useKeybindings";
 import { formatShortcut, keyBadgeClass } from "@/lib/keybindings/match";
 import type { Keybinding } from "@/lib/keybindings/types";
+
+export type ComposerHandle = {
+  focus: () => void;
+  blur: () => void;
+};
+
 type ComposerProps = {
   value: string;
   onChange: (value: string) => void;
@@ -16,19 +28,25 @@ type ComposerProps = {
   isStreaming: boolean;
   onFocusChange?: (focused: boolean) => void;
   disabled?: boolean;
+  autoFocus?: boolean;
 };
 
-export function Composer({
-  value,
-  onChange,
-  onSend,
-  onSendToNewPage,
-  onStop,
-  onAttach,
-  isStreaming,
-  onFocusChange,
-  disabled,
-}: ComposerProps) {
+export const Composer = forwardRef<ComposerHandle, ComposerProps>(
+  function Composer(
+    {
+      value,
+      onChange,
+      onSend,
+      onSendToNewPage,
+      onStop,
+      onAttach,
+      isStreaming,
+      onFocusChange,
+      disabled,
+      autoFocus,
+    },
+    ref,
+  ) {
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const sendShortcut = formatShortcut("alt+enter");
@@ -74,6 +92,23 @@ export function Composer({
 
   useKeybindings("composer", bindings);
   useKeybindings("chat", chatBindings);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => textareaRef.current?.focus(),
+      blur: () => textareaRef.current?.blur(),
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    if (!autoFocus || disabled) return;
+    const frame = requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [autoFocus, disabled]);
 
   return (
     <div className="mx-auto flex max-w-[900px] items-end gap-2.5">
@@ -165,4 +200,5 @@ export function Composer({
       )}
     </div>
   );
-}
+},
+);

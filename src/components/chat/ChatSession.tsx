@@ -555,6 +555,7 @@ export function ChatSession({
           onFocusedPageChange={handleFocusedPageChange}
           centerNewPages={centerNewPages}
           autoFollowLiveReply={autoFollowLiveReply}
+          autoFocusComposer={initialMessages.length === 0}
         />
       </div>
       </div>

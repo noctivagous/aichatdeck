@@ -16,7 +16,7 @@ import type { Keybinding } from "@/lib/keybindings/types";
 import type { PageView } from "@/lib/types";
 import { PageCard } from "./PageCard";
 import { Minimap } from "./Minimap";
-import { Composer } from "./Composer";
+import { Composer, type ComposerHandle } from "./Composer";
 import { ScrollShortcutHint } from "./ScrollShortcutHint";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
@@ -50,6 +50,7 @@ type SlidesTrackProps = {
   onFocusedPageChange: (index: number) => void;
   centerNewPages: boolean;
   autoFollowLiveReply: boolean;
+  autoFocusComposer?: boolean;
 };
 
 export type SlidesTrackHandle = {
@@ -76,15 +77,17 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   onFocusedPageChange,
   centerNewPages,
   autoFollowLiveReply,
+  autoFocusComposer = false,
 }, ref) {
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<ComposerHandle>(null);
   const pendingCenterNewPage = useRef(false);
   const prevPageCountRef = useRef(pages.length);
   const restoredFocusRef = useRef(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [hoveredSlideIndex, setHoveredSlideIndex] = useState<number | null>(null);
-  const [composerFocused, setComposerFocused] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(autoFocusComposer);
   const [unseenCount, setUnseenCount] = useState(0);
   const [edgeGutter, setEdgeGutter] = useState(0);
   const currentIndexRef = useRef(currentIndex);
@@ -147,8 +150,13 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   const hasLivePage = livePageIndex >= 0;
   const isLive = hasLivePage && currentIndex === livePageIndex;
 
+  const blurComposer = useCallback(() => {
+    composerRef.current?.blur();
+  }, []);
+
   const focusPage = useCallback(
-    (index: number, smooth = true) => {
+    (index: number, smooth = true, userInitiated = false) => {
+      if (userInitiated) blurComposer();
       const clamped = Math.min(Math.max(0, index), Math.max(0, pages.length - 1));
       programmaticFocusRef.current = clamped;
       setCurrentIndex(clamped);
@@ -175,6 +183,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
       onFocusedPageChange,
       pages.length,
       scrollSlideToCenter,
+      blurComposer,
     ],
   );
 
@@ -233,11 +242,11 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   const focusPageWithHeading = useCallback(
     (index: number, headingSlug?: string) => {
       if (headingSlug) {
-        focusPage(index, false);
+        focusPage(index, false, true);
         scheduleHeadingScroll(index, headingSlug);
         return;
       }
-      focusPage(index, true);
+      focusPage(index, true, true);
     },
     [focusPage, scheduleHeadingScroll],
   );
@@ -430,7 +439,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
         chord: "arrowleft",
         scope: "chat",
         handler: () => {
-          focusPage(Math.max(0, currentIndexRef.current - 1), false);
+          focusPage(Math.max(0, currentIndexRef.current - 1), false, true);
         },
       },
       {
@@ -441,6 +450,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
           focusPage(
             Math.min(pages.length - 1, currentIndexRef.current + 1),
             false,
+            true,
           );
         },
       },
@@ -450,7 +460,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
         scope: "chat",
         allowInTypingTarget: true,
         handler: () => {
-          focusPage(Math.max(0, currentIndexRef.current - 1), false);
+          focusPage(Math.max(0, currentIndexRef.current - 1), false, true);
         },
       },
       {
@@ -462,6 +472,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
           focusPage(
             Math.min(pages.length - 1, currentIndexRef.current + 1),
             false,
+            true,
           );
         },
       },
@@ -603,7 +614,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
                     : undefined
                 }
                 autoFollowLiveReply={autoFollowLiveReply}
-                onFocus={() => focusPage(page.index, true)}
+                onFocus={() => focusPage(page.index, true, true)}
                 onHoverStart={() => setHoveredSlideIndex(page.index)}
                 onHoverEnd={() =>
                   setHoveredSlideIndex((current) =>
@@ -621,7 +632,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
           variant="outline"
           size="icon"
           className="absolute left-4 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 rounded-full bg-white/90 shadow-lg backdrop-blur lg:grid dark:bg-zinc-900/90"
-          onClick={() => focusPage(Math.max(0, currentIndex - 1))}
+          onClick={() => focusPage(Math.max(0, currentIndex - 1), true, true)}
         >
           <ChevronLeft className="h-5 w-5" />
         </Button>
@@ -630,7 +641,9 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
           variant="outline"
           size="icon"
           className="absolute right-4 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 rounded-full bg-white/90 shadow-lg backdrop-blur lg:grid dark:bg-zinc-900/90"
-          onClick={() => focusPage(Math.min(pages.length - 1, currentIndex + 1))}
+          onClick={() =>
+            focusPage(Math.min(pages.length - 1, currentIndex + 1), true, true)
+          }
         >
           <ChevronRight className="h-5 w-5" />
         </Button>
@@ -638,7 +651,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
         {hasLivePage && !isLive ? (
           <button
             type="button"
-            onClick={() => focusPage(livePageIndex, true)}
+            onClick={() => focusPage(livePageIndex, true, true)}
             className="absolute bottom-6 right-4 z-30 flex h-10 items-center gap-1.5 rounded-full bg-zinc-900 px-3.5 text-[13px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] transition hover:translate-y-[-1px] dark:bg-white dark:text-zinc-900 md:right-6"
           >
             <span>
@@ -667,7 +680,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
             <Minimap
               pages={pages}
               currentIndex={currentIndex}
-              onSelect={(index) => focusPage(index, true)}
+              onSelect={(index) => focusPage(index, true, true)}
             />
             <div className="ml-1 hidden items-center gap-1.5 border-l border-zinc-200 pl-2 text-[11px] text-zinc-500 dark:border-zinc-800 sm:flex">
               <ScrollShortcutHint composerFocused={composerFocused} />
@@ -687,9 +700,11 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
 
         <div className="p-3 md:p-3.5">
           <Composer
+            ref={composerRef}
             value={composerValue}
             onChange={onComposerChange}
             onFocusChange={setComposerFocused}
+            autoFocus={autoFocusComposer}
             onSend={() => {
               if (hasLivePage && !isLive) focusPage(livePageIndex, true);
               onSend();

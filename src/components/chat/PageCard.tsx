@@ -191,7 +191,7 @@ export const PageCard = memo(function PageCard({
   return (
     <article
       className={cn(
-        "slide shrink-0 h-[min(2680px,calc(100%-25px))] max-w-[92vw] cursor-pointer snap-center",
+        "slide shrink-0 h-[min(2680px,calc(100%-25px))] max-w-[92vw] cursor-pointer snap-center outline-none",
         isFocused && "snap-always",
       )}
       style={{ width: `${widthPx}px` }}
@@ -199,6 +199,7 @@ export const PageCard = memo(function PageCard({
       onMouseEnter={onHoverStart}
       onMouseLeave={onHoverEnd}
       onClick={onFocus}
+      onFocus={onFocus}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
@@ -212,8 +213,8 @@ export const PageCard = memo(function PageCard({
       <div
         className={cn(
           "relative flex h-full min-h-0 flex-col overflow-hidden rounded-[0px] border border-zinc-200/70 bg-white shadow-[0_20px_60px_-25px_rgba(0,0,0,0.35)] dark:border-zinc-800 dark:bg-zinc-900",
-          isLive && "ring-1 ring-blue-500/20",
-          isFocused && "ring-2 ring-blue-500/35",
+          isLive && !composerFocused && "ring-1 ring-blue-500/20",
+          isFocused && !composerFocused && "ring-2 ring-blue-500/35",
         )}
       >
         <div className="pointer-events-none absolute inset-0 opacity-[0.03] [background-image:linear-gradient(transparent_23px,#000_24px),linear-gradient(90deg,transparent_23px,#000_24px)] [background-size:24px_24px] dark:[background-image:linear-gradient(transparent_23px,#fff_24px),linear-gradient(90deg,transparent_23px,#fff_24px)]" />
