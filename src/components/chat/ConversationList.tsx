@@ -605,21 +605,16 @@ export function ConversationList() {
     <div className="flex h-[100dvh] flex-col">
       <header
         style={{ viewTransitionName: "app-header" }}
-        className="z-40 flex h-[60px] shrink-0 items-center gap-3 border-b border-zinc-200/70 bg-white/80 px-4 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/70 md:px-6"
+        className="z-40 shrink-0 border-b border-zinc-200/70 bg-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/70"
       >
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
+        <div className="mx-auto flex h-[60px] w-full max-w-5xl items-center justify-between gap-3 px-4 md:px-6">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-[0_4px_12px_-4px_rgba(37,99,235,0.5)]">
               💬
             </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-[15px] font-semibold leading-none tracking-tight">
-                AIChatDeck
-              </h1>
-              <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-                horizontal pages for long AI conversations
-              </p>
-            </div>
+            <h1 className="truncate text-[15px] font-semibold leading-none tracking-tight">
+              AIChatDeck
+            </h1>
             <div
               className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-900"
               role="group"
