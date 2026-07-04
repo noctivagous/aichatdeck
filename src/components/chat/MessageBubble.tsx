@@ -6,12 +6,15 @@ import { cn } from "@/lib/utils";
 import { clampPageColumns, type PageColumnCount } from "@/lib/page-columns";
 import {
   REPLY_FONT_SCALE,
+  replyFontEffectivePx,
   type ReplyFontScaleId,
 } from "@/lib/reply-font-size";
 import {
   REPLY_LINE_HEIGHT,
+  replyLineHeightValue,
   type ReplyLineHeightId,
 } from "@/lib/reply-line-height";
+import type { StreamRenderMode } from "@/lib/streaming-display";
 import { MarkdownReply } from "./MarkdownReply";
 import { AssistantMessageSlugProvider } from "./heading-slug-context";
 
@@ -22,6 +25,8 @@ type MessageBubbleProps = {
   fontScale?: ReplyFontScaleId;
   lineHeight?: ReplyLineHeightId;
   streaming?: boolean;
+  displayText?: string;
+  streamRenderMode?: StreamRenderMode;
 };
 
 export const MessageBubble = memo(function MessageBubble({
@@ -31,6 +36,8 @@ export const MessageBubble = memo(function MessageBubble({
   fontScale = REPLY_FONT_SCALE.default,
   lineHeight = REPLY_LINE_HEIGHT.default,
   streaming = false,
+  displayText,
+  streamRenderMode = "markdown",
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const columns = clampPageColumns(columnCount);
@@ -47,17 +54,39 @@ export const MessageBubble = memo(function MessageBubble({
       >
         {message.parts.map((part, index) => {
           if (part.type === "text") {
-            return isUser ? (
-              <p
-                key={index}
-                className="whitespace-pre-wrap text-[14px] leading-[1.5]"
-              >
-                {part.text}
-              </p>
-            ) : (
+            const text = displayText ?? part.text;
+
+            if (isUser) {
+              return (
+                <p
+                  key={index}
+                  className="whitespace-pre-wrap text-[14px] leading-[1.5]"
+                >
+                  {text}
+                </p>
+              );
+            }
+
+            if (streaming && streamRenderMode === "plain") {
+              return (
+                <div
+                  key={`${index}-plain`}
+                  className="markdown-body markdown-body-streaming"
+                  style={{
+                    fontSize: `${replyFontEffectivePx(fontScale)}px`,
+                    lineHeight: replyLineHeightValue(lineHeight),
+                  }}
+                >
+                  <p className="whitespace-pre-wrap">{text}</p>
+                  <span className="streaming-cursor" aria-hidden />
+                </div>
+              );
+            }
+
+            return (
               <MarkdownReply
                 key={`${index}-${columns}`}
-                content={part.text}
+                content={text}
                 columnCount={columns}
                 fontScale={fontScale}
                 lineHeight={lineHeight}

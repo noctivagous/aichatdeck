@@ -25,6 +25,15 @@ import {
 import { useReplyLineHeight } from "@/hooks/useReplyLineHeight";
 import { useCenterNewPages } from "@/hooks/useCenterNewPages";
 import { useAutoFollowLiveReply } from "@/hooks/useAutoFollowLiveReply";
+import { useStreamingDisplay } from "@/hooks/useStreamingDisplay";
+import {
+  isStreamPacedIntervalMs,
+  isStreamRenderMode,
+  isStreamUpdateMode,
+  STREAM_PACED_INTERVALS,
+  STREAM_RENDER_MODES,
+  STREAM_UPDATE_MODES,
+} from "@/lib/streaming-display";
 import {
   isReplyLineHeightId,
   REPLY_LINE_HEIGHTS,
@@ -91,6 +100,7 @@ export function SettingsPage() {
   const { centerNewPages, setCenterNewPagesEnabled } = useCenterNewPages();
   const { autoFollowLiveReply, setAutoFollowLiveReplyEnabled } =
     useAutoFollowLiveReply();
+  const { streamingDisplay, setStreamingDisplay } = useStreamingDisplay();
 
   useEffect(() => {
     void (async () => {
@@ -163,6 +173,114 @@ export function SettingsPage() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+      </div>
+
+      <div className="mb-8 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <Label>Reply streaming</Label>
+            <p className="text-sm text-zinc-500">
+              Control how assistant text appears while a reply is generating.
+              Plain text is fastest. Markdown mode uses block memoization and
+              syntax repair so only the active paragraph re-parses.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="stream-update-mode">Visual update rate</Label>
+            <Select
+              value={streamingDisplay.updateMode}
+              onValueChange={(value) => {
+                if (isStreamUpdateMode(value)) {
+                  setStreamingDisplay({ updateMode: value });
+                }
+              }}
+            >
+              <SelectTrigger id="stream-update-mode" className="max-w-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STREAM_UPDATE_MODES.map((mode) => (
+                  <SelectItem key={mode.id} value={mode.id}>
+                    {mode.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-zinc-500">
+              {
+                STREAM_UPDATE_MODES.find(
+                  (mode) => mode.id === streamingDisplay.updateMode,
+                )?.description
+              }
+            </p>
+          </div>
+          {streamingDisplay.updateMode === "paced" ? (
+            <div className="space-y-2">
+              <Label htmlFor="stream-paced-interval">Paced interval</Label>
+              <Select
+                value={String(streamingDisplay.pacedIntervalMs)}
+                onValueChange={(value) => {
+                  const parsed = Number(value);
+                  if (isStreamPacedIntervalMs(parsed)) {
+                    setStreamingDisplay({ pacedIntervalMs: parsed });
+                  }
+                }}
+              >
+                <SelectTrigger id="stream-paced-interval" className="max-w-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STREAM_PACED_INTERVALS.map((option) => (
+                    <SelectItem key={option.id} value={String(option.id)}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+          <div className="space-y-2">
+            <Label htmlFor="stream-render-mode">While streaming</Label>
+            <Select
+              value={streamingDisplay.renderMode}
+              onValueChange={(value) => {
+                if (isStreamRenderMode(value)) {
+                  setStreamingDisplay({ renderMode: value });
+                }
+              }}
+            >
+              <SelectTrigger id="stream-render-mode" className="max-w-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STREAM_RENDER_MODES.map((mode) => (
+                  <SelectItem key={mode.id} value={mode.id}>
+                    {mode.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-zinc-500">
+              {
+                STREAM_RENDER_MODES.find(
+                  (mode) => mode.id === streamingDisplay.renderMode,
+                )?.description
+              }
+              {streamingDisplay.renderMode === "markdown" &&
+              streamingDisplay.updateMode === "smooth"
+                ? " Smooth is automatically capped to 50 ms paced updates in markdown mode."
+                : null}
+            </p>
+          </div>
+          <SettingsToggle
+            label="Streaming progress indicator"
+            description="Show character count and catch-up progress in the live page header while a reply streams."
+            checked={streamingDisplay.showProgress}
+            onCheckedChange={(enabled) =>
+              setStreamingDisplay({ showProgress: enabled })
+            }
+          />
         </div>
       </div>
 

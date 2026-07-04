@@ -38,6 +38,7 @@ import {
 import type { PageColumnCount } from "@/lib/page-columns";
 import type { ReplyFontScaleId } from "@/lib/reply-font-size";
 import type { ReplyLineHeightId } from "@/lib/reply-line-height";
+import type { StreamingDisplaySettings } from "@/lib/streaming-display";
 import { pushWithViewTransition } from "@/lib/view-transition-nav";
 import { useSlideBackGesture } from "@/hooks/useSlideBackGesture";
 type SlidesTrackProps = {
@@ -62,6 +63,7 @@ type SlidesTrackProps = {
   autoFocusComposer?: boolean;
   onPageSealChange?: (pageIndex: number, sealed: boolean) => void;
   onPageDelete?: (pageIndex: number) => void;
+  streamingDisplay?: StreamingDisplaySettings;
 };
 
 export type SlidesTrackHandle = {
@@ -91,6 +93,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   autoFocusComposer = false,
   onPageSealChange,
   onPageDelete,
+  streamingDisplay,
 }, ref) {
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -663,6 +666,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
                   !(isStreaming && composePageIndex === page.index)
                 }
                 onDelete={() => onPageDelete?.(page.index)}
+                streamingDisplay={streamingDisplay}
               />
             ))}
             <div className="shrink-0" style={{ width: edgeGutter }} aria-hidden />

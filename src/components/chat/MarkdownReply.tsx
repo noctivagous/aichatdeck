@@ -19,10 +19,16 @@ import {
   type ReplyLineHeightId,
 } from "@/lib/reply-line-height";
 import { segmentMarkdownForColumns } from "@/lib/markdown-column-segments";
+import { buildBlockSlugOffsets } from "@/lib/markdown-blocks";
 import { rehypeMarkdownPolish } from "@/lib/rehype-markdown-polish";
 import { rehypeTableTitles } from "@/lib/rehype-table-titles";
+import { useStreamingMarkdownBlocks } from "@/hooks/useStreamingMarkdownBlocks";
 import { markdownComponents } from "./markdown-components";
 import { useMessageHeadingSlugs } from "./heading-slug-context";
+import {
+  MemoizedMarkdownBlock,
+  withHeadingSlugs,
+} from "./MemoizedMarkdownBlock";
 import "katex/dist/katex.min.css";
 
 type MarkdownReplyProps = {
@@ -33,51 +39,14 @@ type MarkdownReplyProps = {
   streaming?: boolean;
 };
 
-type MdNode = {
-  type?: string;
-  depth?: number;
-  data?: {
-    hProperties?: Record<string, unknown>;
-  };
-  children?: MdNode[];
-};
-
-function withHeadingSlugs(slugs: string[]) {
-  return function headingSlugPlugin() {
-    return function transform(tree: MdNode) {
-      let headingIndex = 0;
-
-      const walk = (node: MdNode) => {
-        if (node.type === "heading" && (node.depth ?? 0) >= 1 && (node.depth ?? 0) <= 3) {
-          const slug = slugs[headingIndex++];
-          if (slug) {
-            node.data = {
-              ...node.data,
-              hProperties: {
-                ...(node.data?.hProperties ?? {}),
-                id: slug,
-                "data-heading-slug": slug,
-              },
-            };
-          }
-        }
-
-        for (const child of node.children ?? []) {
-          walk(child);
-        }
-      };
-
-      walk(tree);
-    };
-  };
-}
-
 const REHYPE_PLUGINS_COMPLETE = [
   rehypeKatex,
   rehypeMarkdownPolish,
   rehypeTableTitles,
 ];
-const REHYPE_PLUGINS_STREAMING = [rehypeMarkdownPolish, rehypeTableTitles];
+
+const STREAMING_REMARK_PLUGINS = [remarkGfm];
+const STREAMING_REHYPE_PLUGINS: never[] = [];
 
 export function MarkdownReply({
   content,
@@ -97,6 +66,11 @@ export function MarkdownReply({
     () => (useColumns ? segmentMarkdownForColumns(content) : null),
     [content, useColumns],
   );
+  const streamingBlocks = useStreamingMarkdownBlocks(content, streaming);
+  const streamingSlugOffsets = useMemo(
+    () => (streaming ? buildBlockSlugOffsets(streamingBlocks) : []),
+    [streaming, streamingBlocks],
+  );
 
   const bodyStyle = {
     fontSize: `${effectiveFontPx}px`,
@@ -108,7 +82,7 @@ export function MarkdownReply({
     streaming && "markdown-body-streaming",
   );
   const rehypePlugins = streaming
-    ? REHYPE_PLUGINS_STREAMING
+    ? STREAMING_REHYPE_PLUGINS
     : REHYPE_PLUGINS_COMPLETE;
 
   const columnStyle = {
@@ -133,10 +107,29 @@ export function MarkdownReply({
     <span className="streaming-cursor" aria-hidden />
   ) : null;
 
+  if (streaming) {
+    return (
+      <div className={wrapperClass} style={bodyStyle}>
+        {streamingBlocks.map((block, index) => (
+          <MemoizedMarkdownBlock
+            key={`block-${index}`}
+            blockIndex={index}
+            content={block}
+            remarkPlugins={STREAMING_REMARK_PLUGINS}
+            rehypePlugins={STREAMING_REHYPE_PLUGINS}
+            headingSlugs={headingSlugs}
+            slugOffset={streamingSlugOffsets[index] ?? 0}
+          />
+        ))}
+        {streamingCursor}
+      </div>
+    );
+  }
+
   if (!useColumns || !segments || segments.length === 0) {
     return (
       <div className={wrapperClass} style={bodyStyle}>
-        {renderMarkdown(content, streaming ? "stream" : "single")}
+        {renderMarkdown(content, "single")}
         {streamingCursor}
       </div>
     );

@@ -55,6 +55,7 @@ import { useReplyFontSize } from "@/hooks/useReplyFontSize";
 import { useReplyLineHeight } from "@/hooks/useReplyLineHeight";
 import { useCenterNewPages } from "@/hooks/useCenterNewPages";
 import { useAutoFollowLiveReply } from "@/hooks/useAutoFollowLiveReply";
+import { useStreamingDisplay } from "@/hooks/useStreamingDisplay";
 import { useSessionOutlineSidebar } from "@/hooks/useSessionOutlineSidebar";
 import { buildSessionOutline } from "@/lib/session-outline";
 import type { ChatNavigateTarget } from "@/lib/chat-navigation";
@@ -113,6 +114,7 @@ export function ChatSession({
   const { lineHeight } = useReplyLineHeight();
   const { centerNewPages } = useCenterNewPages();
   const { autoFollowLiveReply } = useAutoFollowLiveReply();
+  const { streamingDisplay } = useStreamingDisplay();
   const { sidebarOpen, toggleSidebar } = useSessionOutlineSidebar();
   const slidesTrackRef = useRef<SlidesTrackHandle>(null);
   const navigateHandledRef = useRef(false);
@@ -829,6 +831,7 @@ export function ChatSession({
           autoFocusComposer={initialMessages.length === 0}
           onPageSealChange={handlePageSealChange}
           onPageDelete={handlePageDelete}
+          streamingDisplay={streamingDisplay}
         />
       </div>
       </div>

@@ -19,8 +19,9 @@ to open up a group of chat slides.
 
 
 ## Chat Length
-To the right of the textbox submission buttons,
-a tab control for response length [ Short | Small | Medium | Regular ]
+To the left of the textbox,
+a tab control for response length 
+[ Short | Small | Medium | Auto ]
 
 Short = 1-2 sentences
 Small = 1-2 paragraphs
@@ -55,6 +56,9 @@ render them as buttons.
 
 
 ---
+
+
+- Each chat page can have a route, /page.
 
 - The width should have two modes: custom and auto, which sets
 the width of a slide to the width of the slide container
@@ -91,7 +95,7 @@ and get clipped.  It could be that even with three
 columns there can be a minimum width underneath which 
 three columns turns into two and and then one
 where two turns into one, because column width has
-to matter
+to matter.
 
 
 ## Chat Types

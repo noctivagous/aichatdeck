@@ -15,7 +15,13 @@ import {
   formatCountLabel,
 } from "@/lib/counting-types";
 import { messageText } from "@/lib/tokens";
+import {
+  effectiveStreamUpdateMode,
+  type StreamingDisplaySettings,
+} from "@/lib/streaming-display";
+import { useThrottledStreamContent } from "@/hooks/useThrottledStreamContent";
 import { PageSlugPlanProvider } from "./heading-slug-context";
+import { StreamingProgressIndicator } from "./StreamingProgressIndicator";
 import {
   Select,
   SelectContent,
@@ -31,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical, Trash2 } from "lucide-react";
+import { scrollViewportToMessage } from "@/lib/scroll-to-heading";
 
 type PageCardProps = {
   page: PageView;
@@ -51,6 +58,7 @@ type PageCardProps = {
   canSeal?: boolean;
   onDelete?: () => void;
   canDelete?: boolean;
+  streamingDisplay?: StreamingDisplaySettings;
 };
 
 const SECTION_LABEL_MAX_LENGTH = 42;
@@ -81,18 +89,39 @@ export const PageCard = memo(function PageCard({
   canSeal = false,
   onDelete,
   canDelete = false,
+  streamingDisplay,
 }: PageCardProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const pinnedToBottomRef = useRef(true);
+  const seenUserMessageIdsRef = useRef<Set<string>>(new Set());
+  const userScrollInitRef = useRef(false);
+  const promptScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const lastMessage = page.messages[page.messages.length - 1];
-  const streamingMessage =
-    autoFollowLiveReply && streamingMessageId
-      ? page.messages.find((message) => message.id === streamingMessageId)
-      : undefined;
-  const streamingTextLength = streamingMessage
-    ? messageText(streamingMessage).length
-    : 0;
+  const streamingMessage = streamingMessageId
+    ? page.messages.find((message) => message.id === streamingMessageId)
+    : undefined;
+  const streamingRawText = streamingMessage
+    ? messageText(streamingMessage)
+    : "";
+  const isStreamingMessage = isStreaming && !!streamingMessageId;
+  const streamUpdate = effectiveStreamUpdateMode(
+    streamingDisplay ?? {
+      updateMode: "smooth",
+      pacedIntervalMs: 50,
+      renderMode: "plain",
+      showProgress: true,
+    },
+  );
+  const throttledStream = useThrottledStreamContent(
+    streamingRawText,
+    isStreamingMessage,
+    streamUpdate.updateMode,
+    streamUpdate.pacedIntervalMs,
+  );
+  const streamingTextLength = streamingRawText.length;
 
   const showTypingIndicator =
     isLive &&
@@ -168,6 +197,74 @@ export const PageCard = memo(function PageCard({
     viewport.addEventListener("scroll", updateActiveSection, { passive: true });
     return () => viewport.removeEventListener("scroll", updateActiveSection);
   }, [sections]);
+
+  useEffect(() => {
+    const userMessageIds = page.messages
+      .filter((message) => message.role === "user")
+      .map((message) => message.id);
+
+    if (!userScrollInitRef.current) {
+      seenUserMessageIdsRef.current = new Set(userMessageIds);
+      userScrollInitRef.current = true;
+      return;
+    }
+
+    if (!isLive) {
+      seenUserMessageIdsRef.current = new Set(userMessageIds);
+      return;
+    }
+
+    const newUserMessage = page.messages.find(
+      (message) =>
+        message.role === "user" &&
+        !seenUserMessageIdsRef.current.has(message.id),
+    );
+    seenUserMessageIdsRef.current = new Set(userMessageIds);
+
+    if (!newUserMessage) return;
+
+    if (promptScrollTimerRef.current) {
+      clearTimeout(promptScrollTimerRef.current);
+      promptScrollTimerRef.current = null;
+    }
+
+    const sectionId = messageSectionIds.get(newUserMessage.id);
+    if (sectionId) {
+      setActiveSectionId(sectionId);
+    }
+
+    pinnedToBottomRef.current = false;
+
+    let attempts = 0;
+    const poll = () => {
+      const viewport = scrollAreaRef.current?.querySelector<HTMLElement>(
+        "[data-radix-scroll-area-viewport]",
+      );
+      if (!viewport) return;
+
+      if (scrollViewportToMessage(viewport, newUserMessage.id, "smooth")) {
+        if (autoFollowLiveReply) {
+          pinnedToBottomRef.current = true;
+        }
+        return;
+      }
+
+      if (attempts++ < 40) {
+        promptScrollTimerRef.current = setTimeout(poll, 50);
+      }
+    };
+
+    requestAnimationFrame(() => requestAnimationFrame(poll));
+  }, [autoFollowLiveReply, isLive, messageSectionIds, page.messages]);
+
+  useEffect(
+    () => () => {
+      if (promptScrollTimerRef.current) {
+        clearTimeout(promptScrollTimerRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!autoFollowLiveReply || !isLive) return;
@@ -288,6 +385,14 @@ export const PageCard = memo(function PageCard({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
+            {isStreamingMessage && streamingDisplay?.showProgress ? (
+              <StreamingProgressIndicator
+                receivedChars={streamingTextLength}
+                displayedChars={throttledStream.displayed.length}
+                pendingChars={throttledStream.pendingChars}
+                updateMode={streamingDisplay.updateMode}
+              />
+            ) : null}
             {sections.length > 1 ? (
               <div onClick={(event) => event.stopPropagation()}>
                 <Select
@@ -378,7 +483,12 @@ export const PageCard = memo(function PageCard({
 
         <div className="relative min-h-0 flex-1 px-4 pb-5 pt-4 md:px-5">
           <ScrollArea ref={scrollAreaRef} className="h-full min-h-0">
-            <PageSlugPlanProvider page={page}>
+            <PageSlugPlanProvider
+              page={page}
+              streamingMessageId={
+                isStreamingMessage ? streamingMessageId : undefined
+              }
+            >
             <div className="space-y-3.5 pr-3">
               {page.messages.map((msg) => (
                 <div
@@ -395,6 +505,12 @@ export const PageCard = memo(function PageCard({
                     lineHeight={lineHeight}
                     streaming={isStreaming && msg.id === streamingMessageId}
                     animate={msg.id !== streamingMessageId}
+                    displayText={
+                      msg.id === streamingMessageId
+                        ? throttledStream.displayed
+                        : undefined
+                    }
+                    streamRenderMode={streamingDisplay?.renderMode}
                   />
                 </div>
               ))}
@@ -440,6 +556,7 @@ export const PageCard = memo(function PageCard({
     prev.canSeal === next.canSeal &&
     prev.onSealChange === next.onSealChange &&
     prev.canDelete === next.canDelete &&
-    prev.onDelete === next.onDelete
+    prev.onDelete === next.onDelete &&
+    prev.streamingDisplay === next.streamingDisplay
   );
 });

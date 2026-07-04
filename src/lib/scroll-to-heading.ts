@@ -32,6 +32,30 @@ export function scrollViewportToHeading(
   });
 }
 
+export function findMessageInViewport(
+  viewport: HTMLElement,
+  messageId: string,
+): HTMLElement | null {
+  return viewport.querySelector<HTMLElement>(
+    `[data-message-id="${CSS.escape(messageId)}"]`,
+  );
+}
+
+export function scrollViewportToMessage(
+  viewport: HTMLElement,
+  messageId: string,
+  behavior: ScrollBehavior = "smooth",
+): boolean {
+  const message = findMessageInViewport(viewport, messageId);
+  if (!message) return false;
+
+  viewport.scrollTo({
+    top: Math.max(0, message.offsetTop - 12),
+    behavior,
+  });
+  return true;
+}
+
 export function isSlideHorizontallyCentered(
   wrap: HTMLElement,
   slide: HTMLElement,

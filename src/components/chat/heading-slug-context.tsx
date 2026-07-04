@@ -3,7 +3,9 @@
 import {
   createContext,
   useContext,
-  useMemo,
+  useEffect,
+  useRef,
+  useState,
   type ReactNode,
 } from "react";
 import type { PageView } from "@/lib/types";
@@ -13,17 +15,39 @@ const PageSlugPlanContext = createContext<Map<string, string[]> | null>(null);
 
 const MessageSlugContext = createContext<string[] | null>(null);
 
+const SLUG_PLAN_STREAMING_DEBOUNCE_MS = 400;
+
 export function PageSlugPlanProvider({
   page,
+  streamingMessageId,
   children,
 }: {
   page: PageView;
+  streamingMessageId?: string;
   children: ReactNode;
 }) {
-  const plan = useMemo(
-    () => buildMessageHeadingSlugPlan(page),
-    [page.messages],
-  );
+  const [plan, setPlan] = useState(() => buildMessageHeadingSlugPlan(page));
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+
+    const delay = streamingMessageId ? SLUG_PLAN_STREAMING_DEBOUNCE_MS : 0;
+    timerRef.current = setTimeout(() => {
+      setPlan(buildMessageHeadingSlugPlan(page));
+      timerRef.current = null;
+    }, delay);
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [page.messages, streamingMessageId]);
 
   return (
     <PageSlugPlanContext.Provider value={plan}>
