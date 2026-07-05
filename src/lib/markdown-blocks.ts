@@ -5,6 +5,7 @@ const HEADING_RE = /^\s{0,3}(#{1,3})[ \t]+.+$/;
 export type MarkdownBlockSplitState = {
   source: string;
   blocks: string[];
+  headingCounts: number[];
 };
 
 function walkLines<T>(
@@ -57,6 +58,10 @@ export function splitMarkdownIntoBlocks(markdown: string): string[] {
   return blocks.length > 0 ? blocks : [markdown];
 }
 
+function countHeadingsPerBlock(blocks: string[]): number[] {
+  return blocks.map((block) => countMarkdownHeadings(block));
+}
+
 function appendedStartsNewBlock(appended: string): boolean {
   if (!appended) return false;
   if (appended.includes("\n\n")) return true;
@@ -69,7 +74,7 @@ export function splitMarkdownIntoBlocksStreaming(
   previous: MarkdownBlockSplitState | null,
 ): MarkdownBlockSplitState {
   if (!markdown) {
-    return { source: "", blocks: [] };
+    return { source: "", blocks: [], headingCounts: [] };
   }
 
   if (
@@ -79,7 +84,11 @@ export function splitMarkdownIntoBlocksStreaming(
     markdown.length < previous.source.length
   ) {
     const blocks = splitMarkdownIntoBlocks(markdown);
-    return { source: markdown, blocks };
+    return {
+      source: markdown,
+      blocks,
+      headingCounts: countHeadingsPerBlock(blocks),
+    };
   }
 
   if (markdown === previous.source) {
@@ -93,22 +102,33 @@ export function splitMarkdownIntoBlocksStreaming(
   ) {
     const blocks = previous.blocks.slice();
     blocks[blocks.length - 1] = blocks[blocks.length - 1] + appended;
-    return { source: markdown, blocks };
+    const headingCounts = previous.headingCounts.slice();
+    headingCounts[headingCounts.length - 1] =
+      (headingCounts[headingCounts.length - 1] ?? 0) +
+      countMarkdownHeadings(appended);
+    return { source: markdown, blocks, headingCounts };
   }
 
+  const blocks = splitMarkdownIntoBlocks(markdown);
   return {
     source: markdown,
-    blocks: splitMarkdownIntoBlocks(markdown),
+    blocks,
+    headingCounts: countHeadingsPerBlock(blocks),
   };
 }
 
-export function buildBlockSlugOffsets(blocks: string[]): number[] {
+export function buildBlockSlugOffsets(
+  blocks: string[],
+  headingCounts?: number[],
+): number[] {
   const offsets: number[] = [];
   let cursor = 0;
 
-  for (const block of blocks) {
+  for (let index = 0; index < blocks.length; index += 1) {
     offsets.push(cursor);
-    cursor += countMarkdownHeadings(block);
+    const block = blocks[index] ?? "";
+    const count = headingCounts?.[index] ?? countMarkdownHeadings(block);
+    cursor += count;
   }
 
   return offsets;

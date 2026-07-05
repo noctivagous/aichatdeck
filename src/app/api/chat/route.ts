@@ -2,7 +2,12 @@ import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { getModel } from "@/lib/ai";
 import { parseModelRef } from "@/lib/model-ref";
 import { getAllProviderKeys } from "@/lib/settings-core";
-import { CHAT_SYSTEM_PROMPT } from "@/lib/chat-system-prompt";
+import {
+  buildChatSystemPrompt,
+  CHAT_LENGTH_DEFAULT,
+  isChatLengthId,
+  type ChatLengthId,
+} from "@/lib/chat-length";
 import { loadSettings } from "@/lib/server/settings";
 import { PROVIDER_IDS, type ProviderId } from "@/lib/types";
 
@@ -24,10 +29,16 @@ function readKeysFromEnv(): Record<ProviderId, string> {
 }
 
 export async function POST(req: Request) {
-  const { messages, modelId } = (await req.json()) as {
+  const body = (await req.json()) as {
     messages: UIMessage[];
     modelId: string;
+    chatLength?: string;
   };
+  const { messages, modelId } = body;
+  const chatLength: ChatLengthId =
+    body.chatLength && isChatLengthId(body.chatLength)
+      ? body.chatLength
+      : CHAT_LENGTH_DEFAULT;
 
   const modelRef = parseModelRef(modelId);
   if (!modelRef) {
@@ -56,7 +67,7 @@ export async function POST(req: Request) {
   try {
     const result = streamText({
       model: getModel(modelRef, keys),
-      system: CHAT_SYSTEM_PROMPT,
+      system: buildChatSystemPrompt(chatLength),
       messages: await convertToModelMessages(messages),
     });
 

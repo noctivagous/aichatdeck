@@ -4,11 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import {
   loadStreamingDisplay,
   saveStreamingDisplay,
+  STREAMING_DISPLAY_DEFAULTS,
   type StreamingDisplaySettings,
 } from "@/lib/streaming-display";
 
 export function useStreamingDisplay() {
-  const [settings, setSettings] = useState(loadStreamingDisplay);
+  const [settings, setSettings] = useState(STREAMING_DISPLAY_DEFAULTS);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {

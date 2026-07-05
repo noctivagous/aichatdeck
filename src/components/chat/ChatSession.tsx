@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { SlidesTrack, type SlidesTrackHandle } from "./SlidesTrack";
 import { SessionOutlineSidebar } from "./SessionOutlineSidebar";
 import { SessionOutlineToggle } from "./SessionOutlineToggle";
+import { MainMenuHeaderButton } from "./MainMenuHeaderButton";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -33,6 +34,8 @@ import {
   computePageMessageRanges,
   computePages,
   deletePage,
+  deleteQa,
+  qaMessageRange,
   liveItemCount,
   maybeAutoSealActivePage,
   normalizeConversationPageState,
@@ -41,6 +44,8 @@ import {
   setPageSealState,
 } from "@/lib/pages";
 import {
+  createConversation,
+  deleteConversation,
   getConversation,
   conversationTitleFromMessages,
   updateConversation,
@@ -54,6 +59,9 @@ import { usePageColumns } from "@/hooks/usePageColumns";
 import { useReplyFontSize } from "@/hooks/useReplyFontSize";
 import { useReplyLineHeight } from "@/hooks/useReplyLineHeight";
 import { useCenterNewPages } from "@/hooks/useCenterNewPages";
+import { useChatLength } from "@/hooks/useChatLength";
+import { useNewPageMode } from "@/hooks/useNewPageMode";
+import { usePageCardLayoutMode } from "@/hooks/usePageCardLayoutMode";
 import { useAutoFollowLiveReply } from "@/hooks/useAutoFollowLiveReply";
 import { useStreamingDisplay } from "@/hooks/useStreamingDisplay";
 import { useSessionOutlineSidebar } from "@/hooks/useSessionOutlineSidebar";
@@ -63,6 +71,7 @@ import { PageWidthSlider } from "./PageWidthSlider";
 import { PageColumnsControl } from "./PageColumnsControl";
 import { ReplyFontSizeControl } from "./ReplyFontSizeControl";
 import { cn } from "@/lib/utils";
+import { consumePendingComposerSend } from "@/lib/pending-composer-send";
 import { pushWithViewTransition } from "@/lib/view-transition-nav";
 
 type ChatSessionProps = {
@@ -108,11 +117,21 @@ export function ChatSession({
   );
   const router = useRouter();
   const { settings, hydrated, reload } = useHydratedSettings();
-  const { pageWidth, setPreviewWidth, commitWidth } = usePageWidth();
+  const {
+    pageWidth,
+    pageWidthMode,
+    fixedWidth,
+    setPreviewWidth,
+    commitWidth,
+    reportContainerWidth,
+  } = usePageWidth();
   const { columnCount, setColumns } = usePageColumns();
   const { fontScale, setReplyFontScale } = useReplyFontSize();
   const { lineHeight } = useReplyLineHeight();
   const { centerNewPages } = useCenterNewPages();
+  const { chatLength, setChatLength } = useChatLength();
+  const { newPageMode, setNewPageMode, isAutoNewPage } = useNewPageMode();
+  const { layoutMode, setLayoutMode } = usePageCardLayoutMode();
   const { autoFollowLiveReply } = useAutoFollowLiveReply();
   const { streamingDisplay } = useStreamingDisplay();
   const { sidebarOpen, toggleSidebar } = useSessionOutlineSidebar();
@@ -150,9 +169,9 @@ export function ChatSession({
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
-        body: () => ({ modelId }),
+        body: () => ({ modelId, chatLength }),
       }),
-    [modelId],
+    [modelId, chatLength],
   );
 
   const {
@@ -173,12 +192,9 @@ export function ChatSession({
     () => computePages(messages, pageBreaks, sealedPageIndices),
     [messages, pageBreaks, sealedPageIndices],
   );
-  const outline = useMemo(
-    () => buildSessionOutline(title, pages),
-    [title, pages],
-  );
   const isStreaming =
     status === "streaming" || status === "submitted" || insertStreaming;
+  const [outline, setOutline] = useState(() => buildSessionOutline(title, pages));
   const composePageIndex = useMemo(
     () => resolveComposePageIndex(focusedPageIndex, pages),
     [focusedPageIndex, pages],
@@ -214,6 +230,7 @@ export function ChatSession({
 
     return undefined;
   }, [isStreaming, composePageIndex, messages, pageBreaks, sealedPageIndices]);
+  const pendingComposerSendConsumedRef = useRef(false);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storageSyncCompleteRef = useRef(false);
@@ -221,12 +238,14 @@ export function ChatSession({
   const sealedPageIndicesRef = useRef(sealedPageIndices);
   const activePageIndexRef = useRef(activePageIndex);
   const modelIdRef = useRef(modelId);
+  const chatLengthRef = useRef(chatLength);
   const messagesRef = useRef(messages);
   const focusedPageRef = useRef(focusedPageIndex);
   pageBreaksRef.current = pageBreaks;
   sealedPageIndicesRef.current = sealedPageIndices;
   activePageIndexRef.current = activePageIndex;
   modelIdRef.current = modelId;
+  chatLengthRef.current = chatLength;
   messagesRef.current = messages;
   focusedPageRef.current = focusedPageIndex;
 
@@ -392,6 +411,17 @@ export function ChatSession({
     if (error) toast.error(error.message);
   }, [error]);
 
+  useEffect(() => {
+    if (!sidebarOpen) return;
+
+    const delay = isStreaming ? 350 : 0;
+    const timer = setTimeout(() => {
+      setOutline(buildSessionOutline(title, pages));
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [isStreaming, pages, sidebarOpen, title]);
+
   const ensureProviderReady = useCallback(() => {
     const ref = resolveModelRef(settings, modelId);
     if (!ref) {
@@ -412,6 +442,31 @@ export function ChatSession({
 
     return true;
   }, [modelId, settings]);
+
+  useEffect(() => {
+    if (!hydrated || pendingComposerSendConsumedRef.current || isStreaming) {
+      return;
+    }
+
+    const pending = consumePendingComposerSend();
+    if (!pending) return;
+
+    pendingComposerSendConsumedRef.current = true;
+
+    const text = pending.text.trim();
+    if (!text && !pending.files?.length) return;
+    if (!ensureProviderReady()) return;
+
+    if (pending.files?.length) {
+      sendMessage({
+        text: text || "What is in this image?",
+        files: pending.files,
+      });
+      return;
+    }
+
+    sendMessage({ text });
+  }, [ensureProviderReady, hydrated, isStreaming, sendMessage]);
 
   const dispatchToComposePage = useCallback(
     async ({
@@ -458,6 +513,7 @@ export function ChatSession({
           sealedPageIndices: sealedPageIndicesRef.current,
           activePageIndex: targetPageIndex,
           modelId: modelIdRef.current,
+          chatLength: chatLengthRef.current,
           onMessagesChange: setMessages,
           onPageBreaksChange: (nextPageBreaks) => {
             pageBreaksRef.current = nextPageBreaks;
@@ -480,19 +536,7 @@ export function ChatSession({
     [sendMessage, setMessages],
   );
 
-  const handleSend = useCallback(() => {
-    const text = input.trim();
-    if (!text || isStreaming) return;
-    if (!ensureProviderReady()) return;
-    void dispatchToComposePage({ text });
-    setInput("");
-  }, [input, isStreaming, ensureProviderReady, dispatchToComposePage]);
-
-  const handleSendToNewPage = useCallback(() => {
-    const text = input.trim();
-    if (!text || isStreaming) return;
-    if (!ensureProviderReady()) return;
-
+  const sealComposePageIfNeeded = useCallback(() => {
     const targetPageIndex = resolveComposePageIndex(focusedPageIndex, pages);
 
     if (canStartNewPage && targetPageIndex >= 0) {
@@ -509,19 +553,50 @@ export function ChatSession({
       setSealedPageIndices(nextState.sealedPageIndices);
       setActivePageIndex(nextState.activePageIndex);
     }
-
-    sendMessage({ text });
-    setInput("");
   }, [
-    input,
-    isStreaming,
-    ensureProviderReady,
     canStartNewPage,
     messages,
     pageBreaks,
     sealedPageIndices,
     focusedPageIndex,
     pages,
+  ]);
+
+  const handleSend = useCallback(() => {
+    const text = input.trim();
+    if (!text || isStreaming) return;
+    if (!ensureProviderReady()) return;
+    if (isAutoNewPage) {
+      sealComposePageIfNeeded();
+      sendMessage({ text });
+      setInput("");
+      return;
+    }
+    void dispatchToComposePage({ text });
+    setInput("");
+  }, [
+    input,
+    isStreaming,
+    ensureProviderReady,
+    isAutoNewPage,
+    sealComposePageIfNeeded,
+    sendMessage,
+    dispatchToComposePage,
+  ]);
+
+  const handleSendToNewPage = useCallback(() => {
+    const text = input.trim();
+    if (!text || isStreaming) return;
+    if (!ensureProviderReady()) return;
+
+    sealComposePageIfNeeded();
+    sendMessage({ text });
+    setInput("");
+  }, [
+    input,
+    isStreaming,
+    ensureProviderReady,
+    sealComposePageIfNeeded,
     sendMessage,
   ]);
 
@@ -529,13 +604,25 @@ export function ChatSession({
     (files: FileList) => {
       if (isStreaming) return;
       if (!ensureProviderReady()) return;
-      void dispatchToComposePage({
-        text: input.trim() || "What is in this image?",
-        files,
-      });
+      const text = input.trim() || "What is in this image?";
+      if (isAutoNewPage) {
+        sealComposePageIfNeeded();
+        sendMessage({ text, files });
+        setInput("");
+        return;
+      }
+      void dispatchToComposePage({ text, files });
       setInput("");
     },
-    [input, isStreaming, ensureProviderReady, dispatchToComposePage],
+    [
+      input,
+      isStreaming,
+      ensureProviderReady,
+      isAutoNewPage,
+      sealComposePageIfNeeded,
+      sendMessage,
+      dispatchToComposePage,
+    ],
   );
 
   const handleOutlineSelectPage = useCallback(
@@ -543,6 +630,210 @@ export function ChatSession({
       slidesTrackRef.current?.focusPage(index, headingSlug);
     },
     [],
+  );
+
+  const handlePageNewPage = useCallback(
+    (pageIndex: number) => {
+      if (isStreaming && composePageIndex === pageIndex) {
+        toast.error("Stop the reply before starting a new page");
+        return;
+      }
+
+      if (composePageIndex !== pageIndex) {
+        toast.error("New Page is only available on the live page");
+        return;
+      }
+
+      if (!canStartNewPage) {
+        return;
+      }
+
+      const nextState = sealActivePageBeforeNewPage(
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+        pageIndex,
+      );
+
+      pageBreaksRef.current = nextState.pageBreaks;
+      sealedPageIndicesRef.current = nextState.sealedPageIndices;
+      activePageIndexRef.current = nextState.activePageIndex;
+      focusedPageRef.current = nextState.activePageIndex;
+
+      setPageBreaks(nextState.pageBreaks);
+      setSealedPageIndices(nextState.sealedPageIndices);
+      setActivePageIndex(nextState.activePageIndex);
+      setFocusedPageIndex(nextState.activePageIndex);
+      slidesTrackRef.current?.focusPage(nextState.activePageIndex);
+
+      void flushPersist();
+    },
+    [canStartNewPage, composePageIndex, flushPersist, isStreaming],
+  );
+
+  const handlePageMoveToNewChat = useCallback(
+    async (pageIndex: number) => {
+      if (isStreaming && composePageIndex === pageIndex) {
+        toast.error("Stop the reply before moving this page");
+        return;
+      }
+
+      const currentPages = computePages(
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+      );
+      const page = currentPages[pageIndex];
+      if (!page || page.messages.length === 0) {
+        toast.error("This page has no messages to move");
+        return;
+      }
+
+      const movedMessages = page.messages;
+      const newTitle = conversationTitleFromMessages(movedMessages);
+
+      try {
+        const newConversation = await createConversation(
+          newTitle,
+          modelIdRef.current,
+        );
+        await updateConversation(newConversation.id, {
+          messages: movedMessages,
+          title: newTitle,
+          modelId: modelIdRef.current,
+          pageBreaks: [],
+          sealedPageIndices: [],
+          activePageIndex: 0,
+          focusedPageIndex: 0,
+        });
+
+        if (currentPages.length <= 1) {
+          await deleteConversation(conversationId);
+          pushWithViewTransition(
+            router,
+            `/chat/${newConversation.id}`,
+            "forward",
+          );
+          toast.success("Page moved to new chat");
+          return;
+        }
+
+        const result = deletePage(
+          pageIndex,
+          messagesRef.current,
+          pageBreaksRef.current,
+          sealedPageIndicesRef.current,
+          activePageIndexRef.current,
+          focusedPageRef.current,
+        );
+
+        if (!result) {
+          toast.error("Failed to remove page from this chat");
+          return;
+        }
+
+        messagesRef.current = result.messages;
+        pageBreaksRef.current = result.pageBreaks;
+        sealedPageIndicesRef.current = result.sealedPageIndices;
+        activePageIndexRef.current = result.activePageIndex;
+        focusedPageRef.current = result.focusedPageIndex;
+
+        setMessages(result.messages);
+        setPageBreaks(result.pageBreaks);
+        setSealedPageIndices(result.sealedPageIndices);
+        setActivePageIndex(result.activePageIndex);
+        setFocusedPageIndex(result.focusedPageIndex);
+        setTitle(conversationTitleFromMessages(result.messages));
+
+        await updateConversation(conversationId, {
+          messages: result.messages,
+          title: conversationTitleFromMessages(result.messages),
+          modelId: modelIdRef.current,
+          pageBreaks: result.pageBreaks,
+          sealedPageIndices: result.sealedPageIndices,
+          activePageIndex: result.activePageIndex,
+          focusedPageIndex: result.focusedPageIndex,
+        });
+
+        pushWithViewTransition(
+          router,
+          `/chat/${newConversation.id}`,
+          "forward",
+        );
+        toast.success("Page moved to new chat");
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to move page",
+        );
+      }
+    },
+    [composePageIndex, conversationId, isStreaming, router, setMessages],
+  );
+
+  const handlePageDeleteQa = useCallback(
+    (pageIndex: number, userMessageId: string) => {
+      const pages = computePages(
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+      );
+      const page = pages[pageIndex];
+      if (!page) return;
+
+      if (page.sealed) {
+        toast.error("Unseal the page before deleting a Q&A");
+        return;
+      }
+
+      const qaRange = qaMessageRange(messagesRef.current, userMessageId);
+      if (!qaRange) {
+        toast.error("Could not delete this Q&A");
+        return;
+      }
+
+      const deletesStreamingReply =
+        isStreaming &&
+        streamingMessageId &&
+        messagesRef.current
+          .slice(qaRange.startIndex, qaRange.endIndex + 1)
+          .some((message) => message.id === streamingMessageId);
+
+      if (deletesStreamingReply) {
+        stop();
+      }
+
+      const result = deleteQa(
+        userMessageId,
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+        activePageIndexRef.current,
+        focusedPageRef.current,
+      );
+
+      if (!result) {
+        toast.error("Could not delete this Q&A");
+        return;
+      }
+
+      messagesRef.current = result.messages;
+      pageBreaksRef.current = result.pageBreaks;
+      sealedPageIndicesRef.current = result.sealedPageIndices;
+      activePageIndexRef.current = result.activePageIndex;
+      focusedPageRef.current = result.focusedPageIndex;
+
+      setMessages(result.messages);
+      setPageBreaks(result.pageBreaks);
+      setSealedPageIndices(result.sealedPageIndices);
+      setActivePageIndex(result.activePageIndex);
+      setFocusedPageIndex(result.focusedPageIndex);
+      setTitle(conversationTitleFromMessages(result.messages));
+      slidesTrackRef.current?.focusPage(result.focusedPageIndex);
+
+      void flushPersist();
+      toast.success("Q&A deleted");
+    },
+    [flushPersist, isStreaming, setMessages, stop, streamingMessageId],
   );
 
   const handlePageDelete = useCallback(
@@ -681,6 +972,8 @@ export function ChatSession({
           backHref="/"
           transitionName="session-outline"
           className="hidden lg:flex"
+          outlineOpen={sidebarOpen}
+          onOutlineToggle={toggleSidebar}
         />
       ) : null}
 
@@ -689,50 +982,59 @@ export function ChatSession({
         style={{ viewTransitionName: "app-header" }}
         className="z-40 flex h-[60px] shrink-0 items-center gap-3 border-b border-zinc-200/70 bg-white/80 px-4 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/70 md:px-6"
       >
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(sidebarOpen && "lg:hidden")}
-          asChild
-        >
-          <Link
-            href="/"
-            aria-label="Back to conversations"
-            onClick={(event) => {
-              if (
-                event.defaultPrevented ||
-                event.button !== 0 ||
-                event.metaKey ||
-                event.ctrlKey ||
-                event.shiftKey ||
-                event.altKey
-              ) {
-                return;
-              }
-              event.preventDefault();
-              pushWithViewTransition(router, "/", "back");
-            }}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-[0_4px_12px_-4px_rgba(37,99,235,0.5)]">
-            💬
+          <div className={cn(sidebarOpen && "lg:hidden")}>
+            <SessionOutlineToggle open={sidebarOpen} onToggle={toggleSidebar} />
           </div>
-          <div className="min-w-0 hidden sm:block">
-            <h1 className="truncate text-[15px] font-semibold leading-none tracking-tight">
-              {title}
-            </h1>
-            <p className="-mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-              horizontal pages, one session
-            </p>
+          <Button
+            variant="outline"
+            size="icon"
+            className={cn("h-9 w-9 shrink-0", sidebarOpen && "lg:hidden")}
+            asChild
+          >
+            <Link
+              href="/"
+              aria-label="Back to conversations"
+              onClick={(event) => {
+                if (
+                  event.defaultPrevented ||
+                  event.button !== 0 ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey
+                ) {
+                  return;
+                }
+                event.preventDefault();
+                pushWithViewTransition(router, "/", "back");
+              }}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div
+            className={cn(
+              "flex min-w-0 items-center gap-2.5",
+              sidebarOpen && "lg:hidden",
+            )}
+          >
+            <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-[0_4px_12px_-4px_rgba(37,99,235,0.5)]">
+              💬
+            </div>
+            <div className="min-w-0 hidden sm:block">
+              <h1 className="truncate text-[15px] font-semibold leading-none tracking-tight">
+                {title}
+              </h1>
+              <p className="-mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                horizontal pages, one session
+              </p>
+            </div>
           </div>
         </div>
 
         <div className="mx-auto flex items-center gap-2">
-          <SessionOutlineToggle open={sidebarOpen} onToggle={toggleSidebar} />
+          <MainMenuHeaderButton />
           {availableModels.length > 0 ? (
             <Select
               value={modelId}
@@ -763,11 +1065,13 @@ export function ChatSession({
               <Link href="/settings">Connect a provider</Link>
             </Button>
           )}
-          <PageWidthSlider
-            value={pageWidth}
-            onPreview={setPreviewWidth}
-            onCommit={commitWidth}
-          />
+          {pageWidthMode === "fixed" ? (
+            <PageWidthSlider
+              value={fixedWidth}
+              onPreview={setPreviewWidth}
+              onCommit={commitWidth}
+            />
+          ) : null}
           <PageColumnsControl value={columnCount} onChange={setColumns} />
           <ReplyFontSizeControl value={fontScale} onChange={setReplyFontScale} />
         </div>
@@ -813,6 +1117,7 @@ export function ChatSession({
           ref={slidesTrackRef}
           pages={pages}
           pageWidth={pageWidth}
+          onTrackWidthChange={reportContainerWidth}
           columnCount={columnCount}
           fontScale={fontScale}
           lineHeight={lineHeight}
@@ -822,16 +1127,26 @@ export function ChatSession({
           onComposerChange={setInput}
           onSend={handleSend}
           onSendToNewPage={handleSendToNewPage}
+          newPageMode={newPageMode}
+          onNewPageModeChange={setNewPageMode}
+          chatLength={chatLength}
+          onChatLengthChange={setChatLength}
           onStop={stop}
           onAttach={handleAttach}
           initialFocusedPageIndex={focusedPageIndex}
           onFocusedPageChange={handleFocusedPageChange}
           centerNewPages={centerNewPages}
+          isAutoNewPage={isAutoNewPage}
           autoFollowLiveReply={autoFollowLiveReply}
           autoFocusComposer={initialMessages.length === 0}
           onPageSealChange={handlePageSealChange}
           onPageDelete={handlePageDelete}
+          onPageNewPage={handlePageNewPage}
+          onPageMoveToNewChat={handlePageMoveToNewChat}
+          onPageDeleteQa={handlePageDeleteQa}
           streamingDisplay={streamingDisplay}
+          layoutMode={layoutMode}
+          onLayoutModeChange={setLayoutMode}
         />
       </div>
       </div>

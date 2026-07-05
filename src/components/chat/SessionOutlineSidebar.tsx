@@ -12,6 +12,7 @@ import {
 import type { OutlineEntry, SessionOutline } from "@/lib/session-outline";
 import { ArrowLeft, ListTree } from "lucide-react";
 import { pushWithViewTransition } from "@/lib/view-transition-nav";
+import { SessionOutlineToggle } from "./SessionOutlineToggle";
 
 type SessionOutlineSidebarProps = {
   outline: SessionOutline | null;
@@ -21,6 +22,8 @@ type SessionOutlineSidebarProps = {
   backHref?: string;
   transitionName?: string;
   className?: string;
+  outlineOpen?: boolean;
+  onOutlineToggle?: () => void;
 };
 
 function entryIndent(level: OutlineEntry["level"]): string {
@@ -57,6 +60,8 @@ export function SessionOutlineSidebar({
   backHref,
   transitionName,
   className,
+  outlineOpen,
+  onOutlineToggle,
 }: SessionOutlineSidebarProps) {
   const router = useRouter();
   const interactive = mode === "interactive" && !!onSelectPage;
@@ -74,8 +79,8 @@ export function SessionOutlineSidebar({
         className,
       )}
     >
-      <div className="flex h-[60px] shrink-0 items-center border-b border-zinc-200/70 px-4 dark:border-zinc-800">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <div className="flex h-[60px] shrink-0 items-center gap-2 border-b border-zinc-200/70 px-4 dark:border-zinc-800">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {backHref ? (
             <Button
               variant="outline"
@@ -122,6 +127,12 @@ export function SessionOutlineSidebar({
             </p>
           </div>
         </div>
+        {onOutlineToggle ? (
+          <SessionOutlineToggle
+            open={outlineOpen ?? false}
+            onToggle={onOutlineToggle}
+          />
+        ) : null}
       </div>
 
       <ScrollArea className="min-h-0 flex-1">

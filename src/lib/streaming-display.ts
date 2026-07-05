@@ -29,6 +29,12 @@ export const STREAM_RENDER_MODES = [
     description:
       "Live markdown with block memoization and syntax repair. Pair with Paced updates for best performance.",
   },
+  {
+    id: "streamdown",
+    label: "Streamdown",
+    description:
+      "Vercel's Streamdown renderer for live and completed replies. Handles incomplete chunks, Shiki code, KaTeX math, and Mermaid. Disables multi-column layout and custom polish.",
+  },
 ] as const;
 
 export const STREAM_PACED_INTERVALS = [
@@ -58,7 +64,7 @@ export const STREAMING_DISPLAY_DEFAULTS: StreamingDisplaySettings = {
   showProgress: true,
 };
 
-/** Smooth + live markdown is capped to paced to avoid main-thread stalls. */
+/** Smooth + custom live markdown is capped to paced to avoid main-thread stalls. */
 export function effectiveStreamUpdateMode(
   settings: StreamingDisplaySettings,
 ): Pick<StreamingDisplaySettings, "updateMode" | "pacedIntervalMs"> {

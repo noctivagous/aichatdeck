@@ -36,8 +36,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, Trash2 } from "lucide-react";
+import {
+  ArrowRightFromLine,
+  LayoutTemplate,
+  MoreVertical,
+  Trash2,
+} from "lucide-react";
 import { scrollViewportToMessage } from "@/lib/scroll-to-heading";
+import {
+  scrollContainedReplyMaxHeightPx,
+  type PageCardLayoutMode,
+} from "@/lib/page-card-layout-mode";
+import { PageCardLayoutModeControl } from "./PageCardLayoutModeControl";
 
 type PageCardProps = {
   page: PageView;
@@ -58,7 +68,14 @@ type PageCardProps = {
   canSeal?: boolean;
   onDelete?: () => void;
   canDelete?: boolean;
+  onNewPage?: () => void;
+  canNewPage?: boolean;
+  onMoveToNewChat?: () => void;
+  canMoveToNewChat?: boolean;
+  onDeleteQa?: (userMessageId: string) => void;
   streamingDisplay?: StreamingDisplaySettings;
+  layoutMode?: PageCardLayoutMode;
+  onLayoutModeChange?: (mode: PageCardLayoutMode) => void;
 };
 
 const SECTION_LABEL_MAX_LENGTH = 42;
@@ -89,8 +106,20 @@ export const PageCard = memo(function PageCard({
   canSeal = false,
   onDelete,
   canDelete = false,
+  onNewPage,
+  canNewPage = false,
+  onMoveToNewChat,
+  canMoveToNewChat = false,
+  onDeleteQa,
   streamingDisplay,
+  layoutMode = "scroll",
+  onLayoutModeChange,
 }: PageCardProps) {
+  const containedReplyScroll = layoutMode === "scroll-contained";
+  const containedReplyMaxHeightPx = scrollContainedReplyMaxHeightPx(
+    fontScale,
+    lineHeight,
+  );
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const pinnedToBottomRef = useRef(true);
   const seenUserMessageIdsRef = useRef<Set<string>>(new Set());
@@ -120,6 +149,16 @@ export const PageCard = memo(function PageCard({
     isStreamingMessage,
     streamUpdate.updateMode,
     streamUpdate.pacedIntervalMs,
+    {
+      minChunkChars:
+        streamingDisplay?.renderMode === "markdown"
+          ? streamUpdate.updateMode === "smooth"
+            ? 320
+            : 220
+          : 1,
+      maxChunkDelayMs:
+        streamingDisplay?.renderMode === "markdown" ? 170 : 90,
+    },
   );
   const streamingTextLength = streamingRawText.length;
 
@@ -383,6 +422,12 @@ export const PageCard = memo(function PageCard({
                 Sealed
               </button>
             </div>
+            {onLayoutModeChange ? (
+              <PageCardLayoutModeControl
+                value={layoutMode}
+                onChange={onLayoutModeChange}
+              />
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
             {isStreamingMessage && streamingDisplay?.showProgress ? (
@@ -390,7 +435,7 @@ export const PageCard = memo(function PageCard({
                 receivedChars={streamingTextLength}
                 displayedChars={throttledStream.displayed.length}
                 pendingChars={throttledStream.pendingChars}
-                updateMode={streamingDisplay.updateMode}
+                updateMode={streamUpdate.updateMode}
               />
             ) : null}
             {sections.length > 1 ? (
@@ -450,7 +495,7 @@ export const PageCard = memo(function PageCard({
             <span className="text-[11px] text-zinc-500">
               ~{(page.tokenEstimate / 1000).toFixed(1)}k
             </span>
-            {onDelete ? (
+            {onDelete || onNewPage || onMoveToNewChat ? (
               <div onClick={(event) => event.stopPropagation()}>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -459,21 +504,43 @@ export const PageCard = memo(function PageCard({
                       variant="ghost"
                       size="icon"
                       aria-label={`${page.label} options`}
-                      disabled={!canDelete}
+                      disabled={!canDelete && !canNewPage && !canMoveToNewChat}
                       className="h-7 w-7 shrink-0 text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
                     >
                       <MoreVertical className="h-3.5 w-3.5" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-[10rem]">
-                    <DropdownMenuItem
-                      disabled={!canDelete}
-                      className="gap-2 text-[13px] text-red-600 focus:bg-red-50 focus:text-red-600 dark:text-red-400 dark:focus:bg-red-950/40 dark:focus:text-red-400"
-                      onSelect={() => onDelete()}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete page
-                    </DropdownMenuItem>
+                  <DropdownMenuContent align="end" className="min-w-[12rem]">
+                    {onNewPage ? (
+                      <DropdownMenuItem
+                        disabled={!canNewPage}
+                        className="gap-2 text-[13px]"
+                        onSelect={() => onNewPage()}
+                      >
+                        <LayoutTemplate className="h-3.5 w-3.5" />
+                        New Page
+                      </DropdownMenuItem>
+                    ) : null}
+                    {onMoveToNewChat ? (
+                      <DropdownMenuItem
+                        disabled={!canMoveToNewChat}
+                        className="gap-2 text-[13px]"
+                        onSelect={() => onMoveToNewChat()}
+                      >
+                        <ArrowRightFromLine className="h-3.5 w-3.5" />
+                        Move Page to New Chat
+                      </DropdownMenuItem>
+                    ) : null}
+                    {onDelete ? (
+                      <DropdownMenuItem
+                        disabled={!canDelete}
+                        className="gap-2 text-[13px] text-red-600 focus:bg-red-50 focus:text-red-600 dark:text-red-400 dark:focus:bg-red-950/40 dark:focus:text-red-400"
+                        onSelect={() => onDelete()}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete page
+                      </DropdownMenuItem>
+                    ) : null}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -490,30 +557,91 @@ export const PageCard = memo(function PageCard({
               }
             >
             <div className="space-y-3.5 pr-3">
-              {page.messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  data-message-id={msg.id}
-                  data-section-id={messageSectionIds.get(msg.id)}
-                >
-                  <MessageBubble
-                    message={msg}
-                    columnCount={
-                      msg.role === "assistant" ? columnCount : undefined
-                    }
-                    fontScale={fontScale}
-                    lineHeight={lineHeight}
-                    streaming={isStreaming && msg.id === streamingMessageId}
-                    animate={msg.id !== streamingMessageId}
-                    displayText={
-                      msg.id === streamingMessageId
-                        ? throttledStream.displayed
-                        : undefined
-                    }
-                    streamRenderMode={streamingDisplay?.renderMode}
-                  />
-                </div>
-              ))}
+              {page.messages.map((msg, messageIndex) => {
+                const sectionId = messageSectionIds.get(msg.id);
+                const messageProps = {
+                  columnCount:
+                    msg.role === "assistant"
+                      ? streamingDisplay?.renderMode === "streamdown"
+                        ? 1
+                        : columnCount
+                      : undefined,
+                  fontScale,
+                  lineHeight,
+                  streaming: isStreaming && msg.id === streamingMessageId,
+                  animate: msg.id !== streamingMessageId,
+                  displayText:
+                    msg.id === streamingMessageId
+                      ? streamingDisplay?.renderMode === "streamdown"
+                        ? streamingRawText
+                        : throttledStream.displayed
+                      : undefined,
+                  streamRenderMode: streamingDisplay?.renderMode,
+                  containedReplyScroll,
+                  containedReplyMaxHeightPx,
+                } as const;
+
+                if (msg.role === "user") {
+                  const deleteQaEnabled = !page.sealed;
+
+                  return (
+                    <div
+                      key={msg.id}
+                      data-message-id={msg.id}
+                      data-section-id={sectionId}
+                      className="flex items-start justify-end gap-0.5"
+                    >
+                      {onDeleteQa ? (
+                        <div
+                          className="mt-1 shrink-0"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Prompt options"
+                                disabled={!deleteQaEnabled}
+                                className="h-6 w-6 text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200"
+                              >
+                                <MoreVertical className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="min-w-[10rem]"
+                            >
+                              <DropdownMenuItem
+                                disabled={!deleteQaEnabled}
+                                className="gap-2 text-[13px] text-red-600 focus:bg-red-50 focus:text-red-600 dark:text-red-400 dark:focus:bg-red-950/40 dark:focus:text-red-400"
+                                onSelect={() => onDeleteQa(msg.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete Q&A
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      ) : null}
+                      <div className="min-w-0 max-w-full">
+                        <MessageBubble message={msg} {...messageProps} />
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={msg.id}
+                    data-message-id={msg.id}
+                    data-section-id={sectionId}
+                  >
+                    <MessageBubble message={msg} {...messageProps} />
+                  </div>
+                );
+              })}
               {showTypingIndicator ? (
                 <div className="flex justify-start">
                   <div className="rounded-[18px] rounded-bl-[5px] border border-zinc-200/70 bg-zinc-100 px-3.5 py-2.5 dark:border-zinc-700/50 dark:bg-zinc-800">
@@ -557,6 +685,13 @@ export const PageCard = memo(function PageCard({
     prev.onSealChange === next.onSealChange &&
     prev.canDelete === next.canDelete &&
     prev.onDelete === next.onDelete &&
-    prev.streamingDisplay === next.streamingDisplay
+    prev.canNewPage === next.canNewPage &&
+    prev.onNewPage === next.onNewPage &&
+    prev.canMoveToNewChat === next.canMoveToNewChat &&
+    prev.onMoveToNewChat === next.onMoveToNewChat &&
+    prev.onDeleteQa === next.onDeleteQa &&
+    prev.streamingDisplay === next.streamingDisplay &&
+    prev.layoutMode === next.layoutMode &&
+    prev.onLayoutModeChange === next.onLayoutModeChange
   );
 });

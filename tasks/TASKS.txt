@@ -1,5 +1,15 @@
 # AIChatDeck Tasks
 
+Make PageCardLayoutMode and it makes
+a segmented control to the right of [Open | Sealed]:
+- Scroll (current)
+- ScrollContained Replies - assistant message portion
+is limited to 8 lines high but has scroll overflow
+active.
+- Summary - user message + first 6 lines of reply
+- Summary Slide - 
+- SlidePresentation - reorganizes the
+
 
 
 ## Keyboard Navigation
@@ -26,7 +36,12 @@ a tab control for response length
 Short = 1-2 sentences
 Small = 1-2 paragraphs
 Medium = 3-5 paragraph
-Regular = determined by AI
+Auto = determined by AI, current setting.
+
+This will likely change what is sent as an 
+instruction added to the system prompt but 
+it could be API I am not sure. research
+the openai api for chatting to determine.
 
 
 ## Chat Features
@@ -60,13 +75,13 @@ render them as buttons.
 
 - Each chat page can have a route, /page.
 
-- The width should have two modes: custom and auto, which sets
-the width of a slide to the width of the slide container
+- The width param in the header bar should have two modes: [Auto | Fixed].
+It is "Fixed" right now.  Auto 
+sets the width of a slide to the width of the slide container
 minus 100pt on each side so that the user sees
-the presence of a a slide on either side or if it is
-the currently the last or the first slide.  This value
-of the remainder on either side should be a setting
-in Settings.
+the presence of a slide on both sides and can tell if it is
+the currently the last or the first slide.  It will be a segm
+control that
 
 - We should have app routes.  For the main menu it would be / with 
 there being two paths for the views

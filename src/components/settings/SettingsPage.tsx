@@ -24,6 +24,8 @@ import {
 } from "@/lib/storage/client";
 import { useReplyLineHeight } from "@/hooks/useReplyLineHeight";
 import { useCenterNewPages } from "@/hooks/useCenterNewPages";
+import { usePageWidth } from "@/hooks/usePageWidth";
+
 import { useAutoFollowLiveReply } from "@/hooks/useAutoFollowLiveReply";
 import { useStreamingDisplay } from "@/hooks/useStreamingDisplay";
 import {
@@ -40,6 +42,13 @@ import {
   replyLineHeightLabel,
 } from "@/lib/reply-line-height";
 import { cn } from "@/lib/utils";
+import {
+  AUTO_SIDE_INSET,
+  isPageWidthMode,
+  PAGE_WIDTH,
+  PAGE_WIDTH_MODE_OPTIONS,
+  pageWidthModeDescription,
+} from "@/lib/page-width";
 
 function SettingsToggle({
   label,
@@ -98,6 +107,16 @@ export function SettingsPage() {
   const [storage, setStorage] = useState<StorageHealth | null>(null);
   const { lineHeight, setReplyLineHeight } = useReplyLineHeight();
   const { centerNewPages, setCenterNewPagesEnabled } = useCenterNewPages();
+  const {
+    pageWidthMode,
+    fixedWidth,
+    autoSideInset,
+    setPageWidthMode,
+    setPreviewWidth,
+    commitWidth,
+    setPreviewAutoSideInset,
+    commitAutoSideInset,
+  } = usePageWidth();
   const { autoFollowLiveReply, setAutoFollowLiveReplyEnabled } =
     useAutoFollowLiveReply();
   const { streamingDisplay, setStreamingDisplay } = useStreamingDisplay();
@@ -183,7 +202,8 @@ export function SettingsPage() {
             <p className="text-sm text-zinc-500">
               Control how assistant text appears while a reply is generating.
               Plain text is fastest. Markdown mode uses block memoization and
-              syntax repair so only the active paragraph re-parses.
+              syntax repair. Streamdown uses Vercel&apos;s renderer for both
+              live and completed replies.
             </p>
           </div>
           <div className="space-y-2">
@@ -281,6 +301,112 @@ export function SettingsPage() {
               setStreamingDisplay({ showProgress: enabled })
             }
           />
+        </div>
+      </div>
+
+      <div className="mb-8 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <Label>Slide width</Label>
+            <p className="text-sm text-zinc-500">
+              Auto fits each slide to the track with a peek of adjacent slides on
+              each side so you can tell where you are in the deck. Fixed uses an
+              exact pixel width.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="page-width-mode">Width mode</Label>
+            <Select
+              value={pageWidthMode}
+              onValueChange={(value) => {
+                if (isPageWidthMode(value)) setPageWidthMode(value);
+              }}
+            >
+              <SelectTrigger id="page-width-mode" className="max-w-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_WIDTH_MODE_OPTIONS.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-zinc-500">
+              {pageWidthModeDescription(pageWidthMode, autoSideInset)}
+            </p>
+          </div>
+          {pageWidthMode === "auto" ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="page-width-auto-inset">Side peek</Label>
+                <span className="text-sm tabular-nums text-zinc-600 dark:text-zinc-400">
+                  {autoSideInset}px
+                </span>
+              </div>
+              <input
+                id="page-width-auto-inset"
+                type="range"
+                min={AUTO_SIDE_INSET.min}
+                max={AUTO_SIDE_INSET.max}
+                step={AUTO_SIDE_INSET.step}
+                value={autoSideInset}
+                aria-label="Adjacent slide peek"
+                aria-valuemin={AUTO_SIDE_INSET.min}
+                aria-valuemax={AUTO_SIDE_INSET.max}
+                aria-valuenow={autoSideInset}
+                aria-valuetext={`${autoSideInset} pixels per side`}
+                className="page-width-slider h-1.5 w-full max-w-sm cursor-pointer accent-blue-600"
+                onChange={(e) =>
+                  setPreviewAutoSideInset(Number(e.currentTarget.value))
+                }
+                onPointerUp={(e) =>
+                  commitAutoSideInset(Number(e.currentTarget.value))
+                }
+                onKeyUp={(e) => {
+                  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                    commitAutoSideInset(Number(e.currentTarget.value));
+                  }
+                }}
+              />
+              <p className="text-sm text-zinc-500">
+                How much of the previous and next slides stays visible on each
+                side.
+              </p>
+            </div>
+          ) : null}
+          {pageWidthMode === "fixed" ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="page-width-fixed">Fixed width</Label>
+                <span className="text-sm tabular-nums text-zinc-600 dark:text-zinc-400">
+                  {fixedWidth}px
+                </span>
+              </div>
+              <input
+                id="page-width-fixed"
+                type="range"
+                min={PAGE_WIDTH.min}
+                max={PAGE_WIDTH.max}
+                step={PAGE_WIDTH.step}
+                value={fixedWidth}
+                aria-label="Fixed slide width"
+                aria-valuemin={PAGE_WIDTH.min}
+                aria-valuemax={PAGE_WIDTH.max}
+                aria-valuenow={fixedWidth}
+                aria-valuetext={`${fixedWidth} pixels`}
+                className="page-width-slider h-1.5 w-full max-w-sm cursor-pointer accent-blue-600"
+                onChange={(e) => setPreviewWidth(Number(e.currentTarget.value))}
+                onPointerUp={(e) => commitWidth(Number(e.currentTarget.value))}
+                onKeyUp={(e) => {
+                  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                    commitWidth(Number(e.currentTarget.value));
+                  }
+                }}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
 

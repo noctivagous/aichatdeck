@@ -45,7 +45,9 @@ import {
 import { buildSessionOutline } from "@/lib/session-outline";
 import { buildChatNavigateHref } from "@/lib/chat-navigation";
 import { keyBadgeClass } from "@/lib/keybindings/match";
+import { stashPendingComposerSend } from "@/lib/pending-composer-send";
 import { pushWithViewTransition } from "@/lib/view-transition-nav";
+import { Composer, type ComposerHandle } from "./Composer";
 import { ConversationListToolbar } from "./ConversationListToolbar";
 import { MessageSearchResult } from "./MessageSearchResult";
 import {
@@ -120,7 +122,10 @@ export function ConversationList() {
   const [sort, setSort] = useState<ConversationSortId>(
     DEFAULT_CONVERSATION_SORT,
   );
+  const [composerInput, setComposerInput] = useState("");
+  const [startingChat, setStartingChat] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<ComposerHandle>(null);
   const selectedIndexRef = useRef(selectedIndex);
   selectedIndexRef.current = selectedIndex;
 
@@ -263,6 +268,14 @@ export function ConversationList() {
         when: () => displayedConversationsRef.current.length > 0,
         handler: openSelectedConversation,
       },
+      {
+        id: "menu-focus-composer",
+        chord: "alt+t",
+        scope: "main-menu",
+        handler: () => {
+          composerRef.current?.focus();
+        },
+      },
     ],
     [openSelectedConversation],
   );
@@ -299,26 +312,61 @@ export function ConversationList() {
     window.localStorage.setItem(SEARCH_SCOPE_STORAGE_KEY, nextScope);
   };
 
-  const handleNew = async () => {
+  const ensureReadyForNewChat = useCallback(async () => {
     const settings = await loadSettings();
     if (!hasConnectedProvider(settings)) {
       toast.error("Connect a provider in Settings before starting a chat");
       router.push("/settings");
-      return;
+      return null;
     }
 
-    if (!settings.defaultModel) {
+    const defaultModel = settings.defaultModel;
+    if (!defaultModel) {
       toast.error("Choose a default model in Settings");
       router.push("/settings");
-      return;
+      return null;
     }
+
+    return { settings, defaultModel };
+  }, [router]);
+
+  const handleNew = async () => {
+    const ready = await ensureReadyForNewChat();
+    if (!ready) return;
 
     const conv = await createConversation(
       "New conversation",
-      encodeModelRef(settings.defaultModel),
+      encodeModelRef(ready.defaultModel),
     );
     pushWithViewTransition(router, `/chat/${conv.id}`, "forward");
   };
+
+  const startChatWithComposer = useCallback(
+    async (payload: { text: string; files?: FileList }) => {
+      const text = payload.text.trim();
+      if (!text && !payload.files?.length) return;
+
+      setStartingChat(true);
+      try {
+        const ready = await ensureReadyForNewChat();
+        if (!ready) return;
+
+        const conv = await createConversation(
+          "New conversation",
+          encodeModelRef(ready.defaultModel),
+        );
+        stashPendingComposerSend({
+          text: text || "What is in this image?",
+          files: payload.files,
+        });
+        setComposerInput("");
+        pushWithViewTransition(router, `/chat/${conv.id}`, "forward");
+      } finally {
+        setStartingChat(false);
+      }
+    },
+    [ensureReadyForNewChat, router],
+  );
 
   const handleExport = async () => {
     setExporting(true);
@@ -736,6 +784,23 @@ export function ConversationList() {
           </div>
         )}
       </div>
+
+      <footer className="shrink-0 border-t border-zinc-200/70 bg-white/85 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/85">
+        <div className="mx-auto w-full max-w-5xl p-3 md:px-6 md:py-3.5">
+          <Composer
+            ref={composerRef}
+            value={composerInput}
+            onChange={setComposerInput}
+            onSend={() => void startChatWithComposer({ text: composerInput })}
+            onAttach={(files) =>
+              void startChatWithComposer({ text: composerInput, files })
+            }
+            isStreaming={false}
+            disabled={startingChat}
+            inputAriaLabel="Message input for a new chat"
+          />
+        </div>
+      </footer>
     </div>
   );
 }

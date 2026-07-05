@@ -29,8 +29,6 @@ import {
   MemoizedMarkdownBlock,
   withHeadingSlugs,
 } from "./MemoizedMarkdownBlock";
-import "katex/dist/katex.min.css";
-
 type MarkdownReplyProps = {
   content: string;
   columnCount?: PageColumnCount;
@@ -66,10 +64,16 @@ export function MarkdownReply({
     () => (useColumns ? segmentMarkdownForColumns(content) : null),
     [content, useColumns],
   );
-  const streamingBlocks = useStreamingMarkdownBlocks(content, streaming);
+  const streamingSplit = useStreamingMarkdownBlocks(content, streaming);
   const streamingSlugOffsets = useMemo(
-    () => (streaming ? buildBlockSlugOffsets(streamingBlocks) : []),
-    [streaming, streamingBlocks],
+    () =>
+      streaming
+        ? buildBlockSlugOffsets(
+            streamingSplit.blocks,
+            streamingSplit.headingCounts,
+          )
+        : [],
+    [streaming, streamingSplit.blocks, streamingSplit.headingCounts],
   );
 
   const bodyStyle = {
@@ -110,7 +114,7 @@ export function MarkdownReply({
   if (streaming) {
     return (
       <div className={wrapperClass} style={bodyStyle}>
-        {streamingBlocks.map((block, index) => (
+        {streamingSplit.blocks.map((block, index) => (
           <MemoizedMarkdownBlock
             key={`block-${index}`}
             blockIndex={index}

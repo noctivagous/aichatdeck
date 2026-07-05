@@ -17,6 +17,7 @@ import type { PageView } from "@/lib/types";
 import { PageCard } from "./PageCard";
 import { Minimap } from "./Minimap";
 import { Composer, type ComposerHandle } from "./Composer";
+import { ChatLengthControl } from "./ChatLengthControl";
 import { ScrollShortcutHint } from "./ScrollShortcutHint";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
@@ -39,11 +40,15 @@ import type { PageColumnCount } from "@/lib/page-columns";
 import type { ReplyFontScaleId } from "@/lib/reply-font-size";
 import type { ReplyLineHeightId } from "@/lib/reply-line-height";
 import type { StreamingDisplaySettings } from "@/lib/streaming-display";
+import type { PageCardLayoutMode } from "@/lib/page-card-layout-mode";
+import type { ChatLengthId } from "@/lib/chat-length";
+import type { NewPageMode } from "@/lib/new-page-mode";
 import { pushWithViewTransition } from "@/lib/view-transition-nav";
 import { useSlideBackGesture } from "@/hooks/useSlideBackGesture";
 type SlidesTrackProps = {
   pages: PageView[];
   pageWidth: number;
+  onTrackWidthChange?: (width: number) => void;
   columnCount: PageColumnCount;
   fontScale: ReplyFontScaleId;
   lineHeight: ReplyLineHeightId;
@@ -53,17 +58,27 @@ type SlidesTrackProps = {
   onComposerChange: (value: string) => void;
   onSend: () => void;
   onSendToNewPage?: () => void;
+  newPageMode?: NewPageMode;
+  onNewPageModeChange?: (mode: NewPageMode) => void;
+  chatLength?: ChatLengthId;
+  onChatLengthChange?: (id: ChatLengthId) => void;
   onStop: () => void;
   onAttach: (files: FileList) => void;
   disabled?: boolean;
   initialFocusedPageIndex: number;
   onFocusedPageChange: (index: number) => void;
   centerNewPages: boolean;
+  isAutoNewPage: boolean;
   autoFollowLiveReply: boolean;
   autoFocusComposer?: boolean;
   onPageSealChange?: (pageIndex: number, sealed: boolean) => void;
   onPageDelete?: (pageIndex: number) => void;
+  onPageNewPage?: (pageIndex: number) => void;
+  onPageMoveToNewChat?: (pageIndex: number) => void;
+  onPageDeleteQa?: (pageIndex: number, userMessageId: string) => void;
   streamingDisplay?: StreamingDisplaySettings;
+  layoutMode?: PageCardLayoutMode;
+  onLayoutModeChange?: (mode: PageCardLayoutMode) => void;
 };
 
 export type SlidesTrackHandle = {
@@ -74,6 +89,7 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   function SlidesTrack({
   pages,
   pageWidth,
+  onTrackWidthChange,
   columnCount,
   fontScale,
   lineHeight,
@@ -83,17 +99,27 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   onComposerChange,
   onSend,
   onSendToNewPage,
+  newPageMode = "manual",
+  onNewPageModeChange,
+  chatLength = "auto",
+  onChatLengthChange,
   onStop,
   onAttach,
   disabled,
   initialFocusedPageIndex,
   onFocusedPageChange,
   centerNewPages,
+  isAutoNewPage,
   autoFollowLiveReply,
   autoFocusComposer = false,
   onPageSealChange,
   onPageDelete,
+  onPageNewPage,
+  onPageMoveToNewChat,
+  onPageDeleteQa,
   streamingDisplay,
+  layoutMode,
+  onLayoutModeChange,
 }, ref) {
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -144,14 +170,16 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
     if (!wrap) return;
 
     const updateGutter = () => {
-      setEdgeGutter(slideEdgeGutter(wrap.clientWidth, pageWidth));
+      const width = wrap.clientWidth;
+      onTrackWidthChange?.(width);
+      setEdgeGutter(slideEdgeGutter(width, pageWidth));
     };
 
     updateGutter();
     const observer = new ResizeObserver(updateGutter);
     observer.observe(wrap);
     return () => observer.disconnect();
-  }, [pageWidth]);
+  }, [pageWidth, onTrackWidthChange]);
 
   useEffect(() => {
     if (edgeGutter <= 0 || pages.length === 0 || isStreamingRef.current) return;
@@ -666,7 +694,27 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
                   !(isStreaming && composePageIndex === page.index)
                 }
                 onDelete={() => onPageDelete?.(page.index)}
+                canNewPage={
+                  composePageIndex === page.index &&
+                  !page.sealed &&
+                  !(isStreaming && composePageIndex === page.index) &&
+                  countItems(page.messages, DEFAULT_COUNTING_TYPE) > 0
+                }
+                onNewPage={() => {
+                  if (centerNewPages) pendingCenterNewPage.current = true;
+                  onPageNewPage?.(page.index);
+                }}
+                canMoveToNewChat={
+                  countItems(page.messages, DEFAULT_COUNTING_TYPE) > 0 &&
+                  !(isStreaming && composePageIndex === page.index)
+                }
+                onMoveToNewChat={() => onPageMoveToNewChat?.(page.index)}
+                onDeleteQa={(userMessageId) =>
+                  onPageDeleteQa?.(page.index, userMessageId)
+                }
                 streamingDisplay={streamingDisplay}
+                layoutMode={layoutMode}
+                onLayoutModeChange={onLayoutModeChange}
               />
             ))}
             <div className="shrink-0" style={{ width: edgeGutter }} aria-hidden />
@@ -732,6 +780,14 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
               <ScrollShortcutHint composerFocused={composerFocused} />
             </div>
           </div>
+          {onChatLengthChange ? (
+            <ChatLengthControl
+              variant="toolbar"
+              value={chatLength}
+              onChange={onChatLengthChange}
+              disabled={disabled || !canCompose}
+            />
+          ) : null}
           <div className="flex shrink-0 items-center gap-2">
             {!isOnLastPage && unseenCount > 0 ? (
               <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-medium text-white">
@@ -755,9 +811,14 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
               if (canCompose && !isOnComposePage) {
                 focusPage(composePageIndex, true);
               }
+              if (centerNewPages && isAutoNewPage) {
+                pendingCenterNewPage.current = true;
+              }
               onSend();
             }}
             disabled={disabled || !canCompose}
+            newPageMode={newPageMode}
+            onNewPageModeChange={onNewPageModeChange}
             onSendToNewPage={() => {
               if (centerNewPages) pendingCenterNewPage.current = true;
               onSendToNewPage?.();

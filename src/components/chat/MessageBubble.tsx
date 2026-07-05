@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
 import type { UIMessage } from "ai";
 import { cn } from "@/lib/utils";
 import { clampPageColumns, type PageColumnCount } from "@/lib/page-columns";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/reply-line-height";
 import type { StreamRenderMode } from "@/lib/streaming-display";
 import { MarkdownReply } from "./MarkdownReply";
+import { StreamdownReply } from "./StreamdownReply";
 import { AssistantMessageSlugProvider } from "./heading-slug-context";
 
 type MessageBubbleProps = {
@@ -27,6 +28,8 @@ type MessageBubbleProps = {
   streaming?: boolean;
   displayText?: string;
   streamRenderMode?: StreamRenderMode;
+  containedReplyScroll?: boolean;
+  containedReplyMaxHeightPx?: number;
 };
 
 export const MessageBubble = memo(function MessageBubble({
@@ -38,19 +41,49 @@ export const MessageBubble = memo(function MessageBubble({
   streaming = false,
   displayText,
   streamRenderMode = "markdown",
+  containedReplyScroll = false,
+  containedReplyMaxHeightPx,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const columns = clampPageColumns(columnCount);
+  const containedReplyRef = useRef<HTMLDivElement>(null);
+  const replyText =
+    displayText ??
+    message.parts
+      .filter((part): part is { type: "text"; text: string } => part.type === "text")
+      .map((part) => part.text)
+      .join("");
 
-  const bubble = (
+  useEffect(() => {
+    if (!containedReplyScroll || !streaming || isUser) return;
+    const container = containedReplyRef.current;
+    if (!container) return;
+
+    container.scrollTop = container.scrollHeight;
+  }, [containedReplyScroll, isUser, replyText, streaming]);
+
+  const bubbleShellClassName = cn(
+    isUser ? "max-w-[88%]" : "w-full max-w-full",
+    isUser
+      ? "rounded-[18px] rounded-br-[5px] bg-blue-600 text-white shadow-[0_6px_18px_-8px_rgba(37,99,235,0.55)]"
+      : "rounded-[18px] rounded-bl-[5px] border border-zinc-200/70 bg-zinc-100 text-zinc-900 dark:border-zinc-700/50 dark:bg-zinc-800 dark:text-zinc-100",
+    containedReplyScroll && !isUser && "overflow-hidden",
+  );
+
+  const bubbleContent = (
       <div
         className={cn(
           "px-3.5 py-2.5",
-          isUser ? "max-w-[88%]" : "w-full max-w-full",
-          isUser
-            ? "rounded-[18px] rounded-br-[5px] bg-blue-600 text-white shadow-[0_6px_18px_-8px_rgba(37,99,235,0.55)]"
-            : "rounded-[18px] rounded-bl-[5px] border border-zinc-200/70 bg-zinc-100 text-zinc-900 dark:border-zinc-700/50 dark:bg-zinc-800 dark:text-zinc-100",
+          containedReplyScroll &&
+            !isUser &&
+            "overflow-y-auto overscroll-y-contain [scrollbar-gutter:stable]",
         )}
+        ref={containedReplyScroll && !isUser ? containedReplyRef : undefined}
+        style={
+          containedReplyScroll && !isUser && containedReplyMaxHeightPx
+            ? { maxHeight: `${containedReplyMaxHeightPx}px` }
+            : undefined
+        }
       >
         {message.parts.map((part, index) => {
           if (part.type === "text") {
@@ -80,6 +113,18 @@ export const MessageBubble = memo(function MessageBubble({
                   <p className="whitespace-pre-wrap">{text}</p>
                   <span className="streaming-cursor" aria-hidden />
                 </div>
+              );
+            }
+
+            if (streamRenderMode === "streamdown") {
+              return (
+                <StreamdownReply
+                  key={`${index}-streamdown`}
+                  content={text}
+                  fontScale={fontScale}
+                  lineHeight={lineHeight}
+                  streaming={streaming}
+                />
               );
             }
 
@@ -120,6 +165,8 @@ export const MessageBubble = memo(function MessageBubble({
         })}
       </div>
   );
+
+  const bubble = <div className={bubbleShellClassName}>{bubbleContent}</div>;
 
   return (
     <div

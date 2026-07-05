@@ -8,10 +8,13 @@ import {
   useRef,
 } from "react";
 import { Button } from "@/components/ui/button";
-import { LayoutTemplate, Paperclip, Send, Square } from "lucide-react";
+import { Paperclip, Send, Square } from "lucide-react";
 import { useKeybindings } from "@/hooks/useKeybindings";
 import { formatShortcut, keyBadgeClass } from "@/lib/keybindings/match";
 import type { Keybinding } from "@/lib/keybindings/types";
+import { cn } from "@/lib/utils";
+import type { NewPageMode } from "@/lib/new-page-mode";
+import { NewPageModeControl } from "./NewPageModeControl";
 
 export type ComposerHandle = {
   focus: () => void;
@@ -23,12 +26,15 @@ type ComposerProps = {
   onChange: (value: string) => void;
   onSend: () => void;
   onSendToNewPage?: () => void;
+  newPageMode?: NewPageMode;
+  onNewPageModeChange?: (mode: NewPageMode) => void;
   onStop?: () => void;
   onAttach: (files: FileList) => void;
   isStreaming: boolean;
   onFocusChange?: (focused: boolean) => void;
   disabled?: boolean;
   autoFocus?: boolean;
+  inputAriaLabel?: string;
 };
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(
@@ -38,18 +44,22 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(
       onChange,
       onSend,
       onSendToNewPage,
+      newPageMode = "manual",
+      onNewPageModeChange,
       onStop,
       onAttach,
       isStreaming,
       onFocusChange,
       disabled,
       autoFocus,
+      inputAriaLabel = "Message input for the live page",
     },
     ref,
   ) {
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const sendShortcut = formatShortcut("alt+enter");
+  const showSendToNewPage = newPageMode === "manual";
 
   const bindings = useMemo<Keybinding[]>(
     () => [
@@ -62,17 +72,21 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(
           if (!isStreaming) onSend();
         },
       },
-      {
-        id: "send-to-new-page",
-        chord: "alt+enter",
-        scope: "composer",
-        requireTypingTarget: true,
-        handler: () => {
-          if (!isStreaming && onSendToNewPage) onSendToNewPage();
-        },
-      },
+      ...(showSendToNewPage && onSendToNewPage
+        ? [
+            {
+              id: "send-to-new-page",
+              chord: "alt+enter",
+              scope: "composer",
+              requireTypingTarget: true,
+              handler: () => {
+                if (!isStreaming) onSendToNewPage();
+              },
+            } satisfies Keybinding,
+          ]
+        : []),
     ],
-    [isStreaming, onSend, onSendToNewPage],
+    [isStreaming, onSend, onSendToNewPage, newPageMode],
   );
 
   const chatBindings = useMemo<Keybinding[]>(
@@ -111,8 +125,20 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(
   }, [autoFocus, disabled]);
 
   return (
-    <div className="mx-auto flex max-w-[900px] items-end gap-2.5">
-      <div className="group relative flex-1">
+    <div className="mx-auto flex max-w-[900px] flex-col gap-2 lg:flex-row lg:items-end lg:gap-2.5">
+      {onNewPageModeChange ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:contents">
+          <div className="lg:hidden">
+            <NewPageModeControl
+              value={newPageMode}
+              onChange={onNewPageModeChange}
+              disabled={disabled}
+            />
+          </div>
+        </div>
+      ) : null}
+      <div className="flex min-w-0 flex-1 items-end gap-2.5">
+      <div className="group relative min-w-0 flex-1">
         {!value && !disabled ? (
           <div
             aria-hidden
@@ -128,7 +154,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(
           rows={1}
           value={value}
           disabled={disabled}
-          aria-label="Message input for the live page"
+          aria-label={inputAriaLabel}
           onFocus={() => onFocusChange?.(true)}
           onBlur={() => onFocusChange?.(false)}
           onChange={(e) => {
@@ -160,15 +186,26 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(
       </div>
 
       {isStreaming ? (
-        <Button
-          type="button"
-          variant="secondary"
-          className="h-[46px] shrink-0 rounded-[14px] px-4"
-          onClick={onStop}
-        >
-          <Square className="h-4 w-4 fill-current" />
-          <span className="hidden sm:inline">Stop</span>
-        </Button>
+        <>
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-[46px] shrink-0 rounded-[14px] px-4"
+            onClick={onStop}
+          >
+            <Square className="h-4 w-4 fill-current" />
+            <span className="hidden sm:inline">Stop</span>
+          </Button>
+          {onNewPageModeChange ? (
+            <div className="hidden shrink-0 lg:block">
+              <NewPageModeControl
+                value={newPageMode}
+                onChange={onNewPageModeChange}
+                disabled={disabled}
+              />
+            </div>
+          ) : null}
+        </>
       ) : (
         <>
           <Button
@@ -180,24 +217,36 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(
             <span className="hidden sm:inline">Send</span>
             <Send className="h-4 w-4" />
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={disabled || !value.trim()}
-            className="h-[46px] shrink-0 rounded-[14px] px-3.5"
-            onClick={onSendToNewPage}
-            title={`Send this message and start it on a new page (${sendShortcut})`}
-          >
-            <span className="hidden items-center gap-1 sm:inline-flex">
-              Send to New Page{" "}
-              <kbd className={keyBadgeClass}>
-                {formatShortcut("alt+enter")}
-              </kbd>
-            </span>
-            <LayoutTemplate className="h-4 w-4" />
-          </Button>
+          {showSendToNewPage && onSendToNewPage ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={disabled || !value.trim()}
+              className="h-[46px] shrink-0 rounded-[14px] px-3.5"
+              onClick={onSendToNewPage}
+              title={`Send this message and start it on a new page (${sendShortcut})`}
+            >
+              <span className="inline-flex items-center gap-1">
+                <span className="sm:hidden">New Page</span>
+                <span className="hidden sm:inline">Send to New Page</span>
+                <kbd className={cn(keyBadgeClass, "hidden sm:inline")}>
+                  {formatShortcut("alt+enter")}
+                </kbd>
+              </span>
+            </Button>
+          ) : null}
+          {onNewPageModeChange ? (
+            <div className="hidden shrink-0 lg:block">
+              <NewPageModeControl
+                value={newPageMode}
+                onChange={onNewPageModeChange}
+                disabled={disabled}
+              />
+            </div>
+          ) : null}
         </>
       )}
+      </div>
     </div>
   );
 },

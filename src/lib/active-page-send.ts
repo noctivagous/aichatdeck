@@ -6,6 +6,7 @@ import {
   type UIMessage,
   type UIMessageChunk,
 } from "ai";
+import type { ChatLengthId } from "./chat-length";
 import { getPageInsertIndex, shiftPageBreaks } from "./pages";
 
 type SendToActivePageArgs = {
@@ -16,6 +17,7 @@ type SendToActivePageArgs = {
   sealedPageIndices: number[];
   activePageIndex: number;
   modelId: string;
+  chatLength: ChatLengthId;
   onMessagesChange: (messages: UIMessage[]) => void;
   onPageBreaksChange: (pageBreaks: number[]) => void;
 };
@@ -48,13 +50,14 @@ function buildUserMessage(text: string, files?: FileList): UIMessage {
 async function streamAssistantReply(
   apiMessages: UIMessage[],
   modelId: string,
+  chatLength: ChatLengthId,
   assistantId: string,
   onAssistantUpdate: (assistant: UIMessage) => void,
 ): Promise<UIMessage> {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: apiMessages, modelId }),
+    body: JSON.stringify({ messages: apiMessages, modelId, chatLength }),
   });
 
   if (!response.ok) {
@@ -110,6 +113,7 @@ export async function sendToActivePage({
   sealedPageIndices,
   activePageIndex,
   modelId,
+  chatLength,
   onMessagesChange,
   onPageBreaksChange,
 }: SendToActivePageArgs): Promise<void> {
@@ -153,6 +157,7 @@ export async function sendToActivePage({
     assistant = await streamAssistantReply(
       apiMessages,
       modelId,
+      chatLength,
       assistantId,
       (updatedAssistant) => {
         onMessagesChange([

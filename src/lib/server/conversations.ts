@@ -154,13 +154,20 @@ function resolveMessages(
   incoming: UIMessage[] | undefined,
 ): UIMessage[] {
   if (!incoming) return existing;
-  if (
+
+  const isStrictPrefix =
     incoming.length < existing.length &&
-    incoming.every((message, index) => message.id === existing[index]?.id)
-  ) {
-    return existing;
-  }
-  return incoming;
+    incoming.every((message, index) => message.id === existing[index]?.id);
+
+  if (!isStrictPrefix) return incoming;
+
+  // A shorter strict prefix is usually a stale streaming persist (tail assistant
+  // still growing). Accept it as a deletion when removed messages include a user
+  // turn — e.g. moving/deleting a page or Q&A from the end of the conversation.
+  const omitted = existing.slice(incoming.length);
+  const looksLikeDeletion = omitted.some((message) => message.role === "user");
+
+  return looksLikeDeletion ? incoming : existing;
 }
 
 export async function updateConversation(
