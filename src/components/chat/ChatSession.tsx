@@ -35,6 +35,10 @@ import {
   computePages,
   deletePage,
   deleteQa,
+  movePageLeft,
+  movePageRight,
+  moveQaAndBeneathToNewPage,
+  moveQaToNewPage,
   qaMessageRange,
   liveItemCount,
   maybeAutoSealActivePage,
@@ -67,6 +71,7 @@ import { useStreamingDisplay } from "@/hooks/useStreamingDisplay";
 import { useSessionOutlineSidebar } from "@/hooks/useSessionOutlineSidebar";
 import { buildSessionOutline } from "@/lib/session-outline";
 import type { ChatNavigateTarget } from "@/lib/chat-navigation";
+import { logStreamingDebug } from "@/lib/streaming-debug";
 import { PageWidthSlider } from "./PageWidthSlider";
 import { PageColumnsControl } from "./PageColumnsControl";
 import { ReplyFontSizeControl } from "./ReplyFontSizeControl";
@@ -223,12 +228,8 @@ export function ChatSession({
       return last?.role === "assistant" ? last.id : undefined;
     }
 
-    for (let index = range.endIndex; index >= range.startIndex; index -= 1) {
-      const message = messages[index];
-      if (message?.role === "assistant") return message.id;
-    }
-
-    return undefined;
+    const lastOnPage = messages[range.endIndex];
+    return lastOnPage?.role === "assistant" ? lastOnPage.id : undefined;
   }, [isStreaming, composePageIndex, messages, pageBreaks, sealedPageIndices]);
   const pendingComposerSendConsumedRef = useRef(false);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -416,7 +417,23 @@ export function ChatSession({
 
     const delay = isStreaming ? 350 : 0;
     const timer = setTimeout(() => {
-      setOutline(buildSessionOutline(title, pages));
+      const startedAt = performance.now();
+      const nextOutline = buildSessionOutline(title, pages);
+      const durationMs = performance.now() - startedAt;
+      if (durationMs >= 6) {
+        logStreamingDebug({
+          source: "ChatSession",
+          event: "build-outline",
+          durationMs,
+          meta: {
+            pageCount: pages.length,
+            messageCount: pages.reduce((count, page) => count + page.messages.length, 0),
+            sidebarOpen,
+            isStreaming,
+          },
+        });
+      }
+      setOutline(nextOutline);
     }, delay);
 
     return () => clearTimeout(timer);
@@ -768,6 +785,165 @@ export function ChatSession({
       }
     },
     [composePageIndex, conversationId, isStreaming, router, setMessages],
+  );
+
+  const applyPageMutation = useCallback(
+    (
+      result: {
+        messages: UIMessage[];
+        pageBreaks: number[];
+        sealedPageIndices: number[];
+        activePageIndex: number;
+        focusedPageIndex: number;
+      } | null,
+      errorMessage: string,
+      successMessage?: string,
+    ) => {
+      if (!result) {
+        toast.error(errorMessage);
+        return false;
+      }
+
+      messagesRef.current = result.messages;
+      pageBreaksRef.current = result.pageBreaks;
+      sealedPageIndicesRef.current = result.sealedPageIndices;
+      activePageIndexRef.current = result.activePageIndex;
+      focusedPageRef.current = result.focusedPageIndex;
+
+      setMessages(result.messages);
+      setPageBreaks(result.pageBreaks);
+      setSealedPageIndices(result.sealedPageIndices);
+      setActivePageIndex(result.activePageIndex);
+      setFocusedPageIndex(result.focusedPageIndex);
+      slidesTrackRef.current?.focusPage(result.focusedPageIndex);
+
+      void flushPersist();
+      if (successMessage) toast.success(successMessage);
+      return true;
+    },
+    [flushPersist, setMessages],
+  );
+
+  const handlePageMoveQaToNewPage = useCallback(
+    (pageIndex: number, userMessageId: string) => {
+      const pages = computePages(
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+      );
+      const page = pages[pageIndex];
+      if (!page) return;
+
+      if (page.sealed) {
+        toast.error("Unseal the page before moving a Q&A");
+        return;
+      }
+
+      if (isStreaming && composePageIndex === pageIndex) {
+        toast.error("Stop the reply before moving a Q&A");
+        return;
+      }
+
+      const result = moveQaToNewPage(
+        userMessageId,
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+        activePageIndexRef.current,
+        focusedPageRef.current,
+      );
+
+      applyPageMutation(
+        result,
+        "This Q&A is already on its own page",
+        "Moved Q&A to new page",
+      );
+    },
+    [applyPageMutation, composePageIndex, isStreaming],
+  );
+
+  const handlePageMoveQaAndBeneathToNewPage = useCallback(
+    (pageIndex: number, userMessageId: string) => {
+      const pages = computePages(
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+      );
+      const page = pages[pageIndex];
+      if (!page) return;
+
+      if (page.sealed) {
+        toast.error("Unseal the page before moving a Q&A");
+        return;
+      }
+
+      if (isStreaming && composePageIndex === pageIndex) {
+        toast.error("Stop the reply before moving a Q&A");
+        return;
+      }
+
+      const result = moveQaAndBeneathToNewPage(
+        userMessageId,
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+        activePageIndexRef.current,
+        focusedPageRef.current,
+      );
+
+      applyPageMutation(
+        result,
+        "Nothing to move — this Q&A is already at the top of the page",
+        "Moved Q&A and content below to new page",
+      );
+    },
+    [applyPageMutation, composePageIndex, isStreaming],
+  );
+
+  const handlePageMoveLeft = useCallback(
+    (pageIndex: number) => {
+      if (isStreaming && composePageIndex === pageIndex) {
+        toast.error("Stop the reply before moving this page");
+        return;
+      }
+
+      const result = movePageLeft(
+        pageIndex,
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+        activePageIndexRef.current,
+        focusedPageRef.current,
+      );
+
+      applyPageMutation(result, "Can't move this page left", "Page moved left");
+    },
+    [applyPageMutation, composePageIndex, isStreaming],
+  );
+
+  const handlePageMoveRight = useCallback(
+    (pageIndex: number) => {
+      if (isStreaming && composePageIndex === pageIndex) {
+        toast.error("Stop the reply before moving this page");
+        return;
+      }
+
+      const result = movePageRight(
+        pageIndex,
+        messagesRef.current,
+        pageBreaksRef.current,
+        sealedPageIndicesRef.current,
+        activePageIndexRef.current,
+        focusedPageRef.current,
+      );
+
+      applyPageMutation(
+        result,
+        "Can't move this page right",
+        "Page moved right",
+      );
+    },
+    [applyPageMutation, composePageIndex, isStreaming],
   );
 
   const handlePageDeleteQa = useCallback(
@@ -1143,7 +1319,13 @@ export function ChatSession({
           onPageDelete={handlePageDelete}
           onPageNewPage={handlePageNewPage}
           onPageMoveToNewChat={handlePageMoveToNewChat}
+          onPageMoveLeft={handlePageMoveLeft}
+          onPageMoveRight={handlePageMoveRight}
           onPageDeleteQa={handlePageDeleteQa}
+          onPageMoveQaToNewPage={handlePageMoveQaToNewPage}
+          onPageMoveQaAndBeneathToNewPage={
+            handlePageMoveQaAndBeneathToNewPage
+          }
           streamingDisplay={streamingDisplay}
           layoutMode={layoutMode}
           onLayoutModeChange={setLayoutMode}

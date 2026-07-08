@@ -361,6 +361,248 @@ export function qaMessageRange(
   return { startIndex, endIndex };
 }
 
+function pageIndexForMessageIndex(
+  ranges: PageMessageRange[],
+  messageIndex: number,
+): number {
+  return ranges.findIndex(
+    (range) =>
+      messageIndex >= range.startIndex && messageIndex <= range.endIndex,
+  );
+}
+
+function focusedPageForMessageId(
+  pages: PageView[],
+  messageId: string,
+  fallback: number,
+): number {
+  const index = pages.findIndex((page) =>
+    page.messages.some((message) => message.id === messageId),
+  );
+  return index >= 0 ? index : fallback;
+}
+
+export function canMoveQaToNewPageOnPage(
+  page: PageView,
+  userMessageId: string,
+): boolean {
+  const messages = page.messages;
+  const startIndex = messages.findIndex(
+    (message) => message.id === userMessageId && message.role === "user",
+  );
+  if (startIndex < 0) return false;
+
+  const nextMessage = messages[startIndex + 1];
+  const endIndex =
+    nextMessage?.role === "assistant" ? startIndex + 1 : startIndex;
+
+  return startIndex > 0 || endIndex < messages.length - 1;
+}
+
+export function canMoveQaAndBeneathToNewPageOnPage(
+  page: PageView,
+  userMessageId: string,
+): boolean {
+  const startIndex = page.messages.findIndex(
+    (message) => message.id === userMessageId && message.role === "user",
+  );
+  return startIndex > 0;
+}
+
+export function moveQaToNewPage(
+  userMessageId: string,
+  messages: UIMessage[],
+  pageBreaks: number[] = [],
+  sealedPageIndices: number[] = [],
+  activePageIndex = 0,
+  focusedPageIndex = 0,
+): DeletePageResult | null {
+  const range = qaMessageRange(messages, userMessageId);
+  if (!range) return null;
+
+  const ranges = computePageMessageRanges(
+    messages,
+    pageBreaks,
+    sealedPageIndices,
+  );
+  const pageIndex = pageIndexForMessageIndex(ranges, range.startIndex);
+  if (pageIndex < 0) return null;
+
+  const pageRange = ranges[pageIndex];
+  const breaksToAdd: number[] = [];
+
+  if (range.startIndex > pageRange.startIndex) {
+    breaksToAdd.push(range.startIndex - 1);
+  }
+  if (range.endIndex < pageRange.endIndex) {
+    breaksToAdd.push(range.endIndex);
+  }
+
+  if (breaksToAdd.length === 0) return null;
+
+  const nextBreaks = materializePageBreaks(
+    messages,
+    [...new Set([...pageBreaks, ...breaksToAdd])].sort((a, b) => a - b),
+  );
+  const pagesAfter = computePages(messages, nextBreaks, sealedPageIndices);
+  const nextPageCount = Math.max(1, pagesAfter.length);
+  const clampIndex = (index: number) =>
+    Math.max(0, Math.min(index, nextPageCount - 1));
+
+  return {
+    messages,
+    pageBreaks: nextBreaks,
+    sealedPageIndices,
+    activePageIndex: clampIndex(activePageIndex),
+    focusedPageIndex: focusedPageForMessageId(
+      pagesAfter,
+      userMessageId,
+      clampIndex(focusedPageIndex),
+    ),
+  };
+}
+
+export function moveQaAndBeneathToNewPage(
+  userMessageId: string,
+  messages: UIMessage[],
+  pageBreaks: number[] = [],
+  sealedPageIndices: number[] = [],
+  activePageIndex = 0,
+  focusedPageIndex = 0,
+): DeletePageResult | null {
+  const range = qaMessageRange(messages, userMessageId);
+  if (!range) return null;
+
+  const ranges = computePageMessageRanges(
+    messages,
+    pageBreaks,
+    sealedPageIndices,
+  );
+  const pageIndex = pageIndexForMessageIndex(ranges, range.startIndex);
+  if (pageIndex < 0) return null;
+
+  const pageRange = ranges[pageIndex];
+  if (range.startIndex <= pageRange.startIndex) return null;
+
+  const breakBefore = range.startIndex - 1;
+  const nextBreaks = materializePageBreaks(
+    messages,
+    [...new Set([...pageBreaks, breakBefore])].sort((a, b) => a - b),
+  );
+  const pagesAfter = computePages(messages, nextBreaks, sealedPageIndices);
+  const nextPageCount = Math.max(1, pagesAfter.length);
+  const clampIndex = (index: number) =>
+    Math.max(0, Math.min(index, nextPageCount - 1));
+
+  return {
+    messages,
+    pageBreaks: nextBreaks,
+    sealedPageIndices,
+    activePageIndex: clampIndex(activePageIndex),
+    focusedPageIndex: focusedPageForMessageId(
+      pagesAfter,
+      userMessageId,
+      clampIndex(focusedPageIndex),
+    ),
+  };
+}
+
+function swapAdjacentPages(
+  pageIndex: number,
+  direction: -1 | 1,
+  messages: UIMessage[],
+  pageBreaks: number[] = [],
+  sealedPageIndices: number[] = [],
+  activePageIndex = 0,
+  focusedPageIndex = 0,
+): DeletePageResult | null {
+  const neighborIndex = pageIndex + direction;
+  const ranges = computePageMessageRanges(
+    messages,
+    pageBreaks,
+    sealedPageIndices,
+  );
+  if (pageIndex < 0 || pageIndex >= ranges.length) return null;
+  if (neighborIndex < 0 || neighborIndex >= ranges.length) return null;
+
+  const chunks = ranges.map((range) =>
+    messages.slice(range.startIndex, range.endIndex + 1),
+  );
+  const currentChunk = chunks[pageIndex];
+  chunks[pageIndex] = chunks[neighborIndex];
+  chunks[neighborIndex] = currentChunk;
+
+  const nextMessages = chunks.flat();
+  const legacyBreaks: number[] = [];
+  let cursor = 0;
+  for (let index = 0; index < chunks.length - 1; index += 1) {
+    cursor += chunks[index].length;
+    legacyBreaks.push(cursor - 1);
+  }
+  const nextBreaks = materializePageBreaks(nextMessages, legacyBreaks);
+
+  const sealedSet = new Set(sealedPageIndices);
+  const pageSealed = sealedSet.has(pageIndex);
+  const neighborSealed = sealedSet.has(neighborIndex);
+  sealedSet.delete(pageIndex);
+  sealedSet.delete(neighborIndex);
+  if (pageSealed) sealedSet.add(neighborIndex);
+  if (neighborSealed) sealedSet.add(pageIndex);
+  const nextSealed = [...sealedSet].sort((a, b) => a - b);
+
+  const remapIndex = (index: number) => {
+    if (index === pageIndex) return neighborIndex;
+    if (index === neighborIndex) return pageIndex;
+    return index;
+  };
+
+  return {
+    messages: nextMessages,
+    pageBreaks: nextBreaks,
+    sealedPageIndices: nextSealed,
+    activePageIndex: remapIndex(activePageIndex),
+    focusedPageIndex: remapIndex(focusedPageIndex),
+  };
+}
+
+export function movePageLeft(
+  pageIndex: number,
+  messages: UIMessage[],
+  pageBreaks: number[] = [],
+  sealedPageIndices: number[] = [],
+  activePageIndex = 0,
+  focusedPageIndex = 0,
+): DeletePageResult | null {
+  return swapAdjacentPages(
+    pageIndex,
+    -1,
+    messages,
+    pageBreaks,
+    sealedPageIndices,
+    activePageIndex,
+    focusedPageIndex,
+  );
+}
+
+export function movePageRight(
+  pageIndex: number,
+  messages: UIMessage[],
+  pageBreaks: number[] = [],
+  sealedPageIndices: number[] = [],
+  activePageIndex = 0,
+  focusedPageIndex = 0,
+): DeletePageResult | null {
+  return swapAdjacentPages(
+    pageIndex,
+    1,
+    messages,
+    pageBreaks,
+    sealedPageIndices,
+    activePageIndex,
+    focusedPageIndex,
+  );
+}
+
 export function deleteQa(
   userMessageId: string,
   messages: UIMessage[],

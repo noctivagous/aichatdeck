@@ -287,10 +287,6 @@ export function SettingsPage() {
                   (mode) => mode.id === streamingDisplay.renderMode,
                 )?.description
               }
-              {streamingDisplay.renderMode === "markdown" &&
-              streamingDisplay.updateMode === "smooth"
-                ? " Smooth is automatically capped to 50 ms paced updates in markdown mode."
-                : null}
             </p>
           </div>
           <SettingsToggle

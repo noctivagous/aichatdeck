@@ -29,6 +29,7 @@ import {
   MemoizedMarkdownBlock,
   withHeadingSlugs,
 } from "./MemoizedMarkdownBlock";
+
 type MarkdownReplyProps = {
   content: string;
   columnCount?: PageColumnCount;
@@ -37,14 +38,12 @@ type MarkdownReplyProps = {
   streaming?: boolean;
 };
 
-const REHYPE_PLUGINS_COMPLETE = [
+const MARKDOWN_REMARK_PLUGINS_BASE = [remarkGfm, remarkMath];
+const MARKDOWN_REHYPE_PLUGINS = [
   rehypeKatex,
   rehypeMarkdownPolish,
   rehypeTableTitles,
 ];
-
-const STREAMING_REMARK_PLUGINS = [remarkGfm];
-const STREAMING_REHYPE_PLUGINS: never[] = [];
 
 export function MarkdownReply({
   content,
@@ -64,16 +63,14 @@ export function MarkdownReply({
     () => (useColumns ? segmentMarkdownForColumns(content) : null),
     [content, useColumns],
   );
-  const streamingSplit = useStreamingMarkdownBlocks(content, streaming);
-  const streamingSlugOffsets = useMemo(
+  const markdownSplit = useStreamingMarkdownBlocks(content, streaming);
+  const blockSlugOffsets = useMemo(
     () =>
-      streaming
-        ? buildBlockSlugOffsets(
-            streamingSplit.blocks,
-            streamingSplit.headingCounts,
-          )
-        : [],
-    [streaming, streamingSplit.blocks, streamingSplit.headingCounts],
+      buildBlockSlugOffsets(
+        markdownSplit.blocks,
+        markdownSplit.headingCounts,
+      ),
+    [markdownSplit.blocks, markdownSplit.headingCounts],
   );
 
   const bodyStyle = {
@@ -85,9 +82,6 @@ export function MarkdownReply({
     "markdown-body",
     streaming && "markdown-body-streaming",
   );
-  const rehypePlugins = streaming
-    ? STREAMING_REHYPE_PLUGINS
-    : REHYPE_PLUGINS_COMPLETE;
 
   const columnStyle = {
     columnCount,
@@ -100,7 +94,7 @@ export function MarkdownReply({
     <ReactMarkdown
       key={key}
       remarkPlugins={remarkPlugins}
-      rehypePlugins={rehypePlugins}
+      rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
       components={markdownComponents}
     >
       {text}
@@ -111,18 +105,18 @@ export function MarkdownReply({
     <span className="streaming-cursor" aria-hidden />
   ) : null;
 
-  if (streaming) {
+  if (!useColumns) {
     return (
       <div className={wrapperClass} style={bodyStyle}>
-        {streamingSplit.blocks.map((block, index) => (
+        {markdownSplit.blocks.map((block, index) => (
           <MemoizedMarkdownBlock
             key={`block-${index}`}
             blockIndex={index}
             content={block}
-            remarkPlugins={STREAMING_REMARK_PLUGINS}
-            rehypePlugins={STREAMING_REHYPE_PLUGINS}
+            remarkPlugins={MARKDOWN_REMARK_PLUGINS_BASE}
+            rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
             headingSlugs={headingSlugs}
-            slugOffset={streamingSlugOffsets[index] ?? 0}
+            slugOffset={blockSlugOffsets[index] ?? 0}
           />
         ))}
         {streamingCursor}
@@ -130,7 +124,7 @@ export function MarkdownReply({
     );
   }
 
-  if (!useColumns || !segments || segments.length === 0) {
+  if (!segments || segments.length === 0) {
     return (
       <div className={wrapperClass} style={bodyStyle}>
         {renderMarkdown(content, "single")}

@@ -63,7 +63,10 @@ export function StreamdownReply({
   headingIndexRef.current = 0;
 
   const components = useMemo((): Components => {
-    const nextSlug = () => headingSlugs[headingIndexRef.current++] ?? undefined;
+    const nextSlug = () => {
+      if (streaming) return undefined;
+      return headingSlugs[headingIndexRef.current++] ?? undefined;
+    };
 
     return {
       h1: ({ className, children, ...props }) => (
@@ -94,7 +97,7 @@ export function StreamdownReply({
         </a>
       ),
     };
-  }, [headingSlugs]);
+  }, [headingSlugs, streaming]);
 
   const bodyStyle = {
     fontSize: `${replyFontEffectivePx(fontScale)}px`,
@@ -107,8 +110,8 @@ export function StreamdownReply({
       style={bodyStyle}
     >
       <Streamdown
-        isAnimating={streaming}
-        animated={streaming}
+        isAnimating={false}
+        animated={false}
         mode={streaming ? "streaming" : "static"}
         parseIncompleteMarkdown={streaming}
         components={components}

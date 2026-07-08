@@ -27,7 +27,7 @@ export const STREAM_RENDER_MODES = [
     id: "markdown",
     label: "Markdown while streaming",
     description:
-      "Live markdown with block memoization and syntax repair. Pair with Paced updates for best performance.",
+      "Live markdown with block memoization, syntax repair, and the same plugins used after the reply completes.",
   },
   {
     id: "streamdown",
@@ -64,17 +64,9 @@ export const STREAMING_DISPLAY_DEFAULTS: StreamingDisplaySettings = {
   showProgress: true,
 };
 
-/** Smooth + custom live markdown is capped to paced to avoid main-thread stalls. */
 export function effectiveStreamUpdateMode(
   settings: StreamingDisplaySettings,
 ): Pick<StreamingDisplaySettings, "updateMode" | "pacedIntervalMs"> {
-  if (settings.renderMode === "markdown" && settings.updateMode === "smooth") {
-    return {
-      updateMode: "paced",
-      pacedIntervalMs: Math.max(settings.pacedIntervalMs, 50) as StreamPacedIntervalMs,
-    };
-  }
-
   return {
     updateMode: settings.updateMode,
     pacedIntervalMs: settings.pacedIntervalMs,

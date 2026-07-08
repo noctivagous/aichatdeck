@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { PageView } from "@/lib/types";
 import { buildMessageHeadingSlugPlan } from "@/lib/session-outline";
+import { logStreamingDebug } from "@/lib/streaming-debug";
 
 const PageSlugPlanContext = createContext<Map<string, string[]> | null>(null);
 
@@ -37,7 +38,22 @@ export function PageSlugPlanProvider({
 
     const delay = streamingMessageId ? SLUG_PLAN_STREAMING_DEBOUNCE_MS : 0;
     timerRef.current = setTimeout(() => {
-      setPlan(buildMessageHeadingSlugPlan(page));
+      const startedAt = performance.now();
+      const nextPlan = buildMessageHeadingSlugPlan(page);
+      const durationMs = performance.now() - startedAt;
+      if (durationMs >= 6) {
+        logStreamingDebug({
+          source: "PageSlugPlanProvider",
+          event: "build-plan",
+          durationMs,
+          meta: {
+            pageIndex: page.index,
+            messages: page.messages.length,
+            streamingMessageId: streamingMessageId ?? null,
+          },
+        });
+      }
+      setPlan(nextPlan);
       timerRef.current = null;
     }, delay);
 

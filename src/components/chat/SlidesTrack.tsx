@@ -75,7 +75,14 @@ type SlidesTrackProps = {
   onPageDelete?: (pageIndex: number) => void;
   onPageNewPage?: (pageIndex: number) => void;
   onPageMoveToNewChat?: (pageIndex: number) => void;
+  onPageMoveLeft?: (pageIndex: number) => void;
+  onPageMoveRight?: (pageIndex: number) => void;
   onPageDeleteQa?: (pageIndex: number, userMessageId: string) => void;
+  onPageMoveQaToNewPage?: (pageIndex: number, userMessageId: string) => void;
+  onPageMoveQaAndBeneathToNewPage?: (
+    pageIndex: number,
+    userMessageId: string,
+  ) => void;
   streamingDisplay?: StreamingDisplaySettings;
   layoutMode?: PageCardLayoutMode;
   onLayoutModeChange?: (mode: PageCardLayoutMode) => void;
@@ -116,7 +123,11 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
   onPageDelete,
   onPageNewPage,
   onPageMoveToNewChat,
+  onPageMoveLeft,
+  onPageMoveRight,
   onPageDeleteQa,
+  onPageMoveQaToNewPage,
+  onPageMoveQaAndBeneathToNewPage,
   streamingDisplay,
   layoutMode,
   onLayoutModeChange,
@@ -709,8 +720,24 @@ export const SlidesTrack = forwardRef<SlidesTrackHandle, SlidesTrackProps>(
                   !(isStreaming && composePageIndex === page.index)
                 }
                 onMoveToNewChat={() => onPageMoveToNewChat?.(page.index)}
+                canMovePageLeft={
+                  page.index > 0 &&
+                  !(isStreaming && composePageIndex === page.index)
+                }
+                onMovePageLeft={() => onPageMoveLeft?.(page.index)}
+                canMovePageRight={
+                  page.index < pages.length - 1 &&
+                  !(isStreaming && composePageIndex === page.index)
+                }
+                onMovePageRight={() => onPageMoveRight?.(page.index)}
                 onDeleteQa={(userMessageId) =>
                   onPageDeleteQa?.(page.index, userMessageId)
+                }
+                onMoveQaToNewPage={(userMessageId) =>
+                  onPageMoveQaToNewPage?.(page.index, userMessageId)
+                }
+                onMoveQaAndBeneathToNewPage={(userMessageId) =>
+                  onPageMoveQaAndBeneathToNewPage?.(page.index, userMessageId)
                 }
                 streamingDisplay={streamingDisplay}
                 layoutMode={layoutMode}

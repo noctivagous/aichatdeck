@@ -32,6 +32,16 @@ export function scrollViewportToHeading(
   });
 }
 
+export function findScrollAreaViewport(
+  scrollAreaRoot: HTMLElement | null,
+): HTMLElement | null {
+  return (
+    scrollAreaRoot?.querySelector<HTMLElement>(
+      "[data-radix-scroll-area-viewport]",
+    ) ?? null
+  );
+}
+
 export function findMessageInViewport(
   viewport: HTMLElement,
   messageId: string,
@@ -49,8 +59,12 @@ export function scrollViewportToMessage(
   const message = findMessageInViewport(viewport, messageId);
   if (!message) return false;
 
+  const viewportRect = viewport.getBoundingClientRect();
+  const messageRect = message.getBoundingClientRect();
+  const top = viewport.scrollTop + (messageRect.top - viewportRect.top) - 12;
+
   viewport.scrollTo({
-    top: Math.max(0, message.offsetTop - 12),
+    top: Math.max(0, top),
     behavior,
   });
   return true;

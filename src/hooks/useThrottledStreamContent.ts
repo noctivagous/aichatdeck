@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { StreamPacedIntervalMs, StreamUpdateMode } from "@/lib/streaming-display";
+import { logStreamingDebug } from "@/lib/streaming-debug";
 
 type ThrottledStreamState = {
   displayed: string;
@@ -12,6 +13,9 @@ type ThrottledStreamState = {
 type ThrottledStreamOptions = {
   minChunkChars?: number;
   maxChunkDelayMs?: number;
+  maxCharsPerFlush?: number;
+  /** Resets displayed state when the active stream identity changes. */
+  streamKey?: string;
 };
 
 export function useThrottledStreamContent(
@@ -30,6 +34,30 @@ export function useThrottledStreamContent(
   const lastPacedFlushRef = useRef(0);
   const minChunkChars = Math.max(1, options?.minChunkChars ?? 1);
   const maxChunkDelayMs = Math.max(16, options?.maxChunkDelayMs ?? 120);
+  const maxCharsPerFlush =
+    options?.maxCharsPerFlush && options.maxCharsPerFlush > 0
+      ? Math.floor(options.maxCharsPerFlush)
+      : null;
+  const streamKey = options?.streamKey;
+  const streamKeyRef = useRef(streamKey);
+
+  const resetDisplayed = (next: string) => {
+    displayedRef.current = next;
+    setDisplayed(next);
+    lastPacedFlushRef.current = 0;
+  };
+
+  if (streamKey !== streamKeyRef.current) {
+    streamKeyRef.current = streamKey;
+    resetDisplayed(content);
+  } else if (
+    streaming &&
+    displayedRef.current.length > 0 &&
+    (content.length < displayedRef.current.length ||
+      !content.startsWith(displayedRef.current))
+  ) {
+    resetDisplayed(content);
+  }
 
   targetRef.current = content;
 
@@ -41,11 +69,39 @@ export function useThrottledStreamContent(
     }
   };
 
-  const flushNow = () => {
-    const next = targetRef.current;
+  const flushStep = (
+    reason: "smooth-raf" | "paced-timer" | "direct",
+    perFlushLimit: number | null,
+  ) => {
+    const target = targetRef.current;
+    const current = displayedRef.current;
+    const pendingChars = Math.max(0, target.length - current.length);
+    if (pendingChars === 0) return 0;
+
+    const canLimit = perFlushLimit !== null && Number.isFinite(perFlushLimit);
+    const nextLength = canLimit
+      ? Math.min(target.length, current.length + perFlushLimit)
+      : target.length;
+    const next = target.slice(0, nextLength);
+
     displayedRef.current = next;
     setDisplayed(next);
     lastPacedFlushRef.current = Date.now();
+
+    const remainingChars = Math.max(0, target.length - next.length);
+    logStreamingDebug({
+      source: "useThrottledStreamContent",
+      event: "flush",
+      meta: {
+        reason,
+        updateMode,
+        pendingChars: Math.max(0, next.length - current.length),
+        nextChars: next.length,
+        remainingChars,
+      },
+    });
+
+    return remainingChars;
   };
 
   const schedulePacedFlush = (delayMs: number) => {
@@ -64,7 +120,10 @@ export function useThrottledStreamContent(
     pacedTimerRef.current = setTimeout(() => {
       pacedTimerRef.current = null;
       pacedTimerDueAtRef.current = null;
-      flushNow();
+      const remainingChars = flushStep("paced-timer", null);
+      if (remainingChars > 0) {
+        schedulePacedFlush(Math.min(maxChunkDelayMs, pacedIntervalMs));
+      }
     }, safeDelay);
   };
 
@@ -72,7 +131,10 @@ export function useThrottledStreamContent(
     if (rafRef.current !== null) return;
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = null;
-      flushNow();
+      const remainingChars = flushStep("smooth-raf", maxCharsPerFlush);
+      if (remainingChars > 0) {
+        scheduleSmoothFlush();
+      }
     });
   };
 
@@ -132,7 +194,7 @@ export function useThrottledStreamContent(
     }
 
     if (reachedMaxDelay || (meetsChunkTarget && elapsed >= pacedIntervalMs)) {
-      flushNow();
+      flushStep("direct", null);
       return;
     }
 
@@ -145,6 +207,7 @@ export function useThrottledStreamContent(
   }, [
     content,
     maxChunkDelayMs,
+    maxCharsPerFlush,
     minChunkChars,
     pacedIntervalMs,
     streaming,

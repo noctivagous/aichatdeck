@@ -37,12 +37,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  ArrowLeft,
+  ArrowRight,
   ArrowRightFromLine,
   LayoutTemplate,
   MoreVertical,
+  SplitSquareHorizontal,
   Trash2,
 } from "lucide-react";
-import { scrollViewportToMessage } from "@/lib/scroll-to-heading";
+import {
+  canMoveQaAndBeneathToNewPageOnPage,
+  canMoveQaToNewPageOnPage,
+} from "@/lib/pages";
+import {
+  findScrollAreaViewport,
+  scrollViewportToMessage,
+} from "@/lib/scroll-to-heading";
 import {
   scrollContainedReplyMaxHeightPx,
   type PageCardLayoutMode,
@@ -72,7 +82,13 @@ type PageCardProps = {
   canNewPage?: boolean;
   onMoveToNewChat?: () => void;
   canMoveToNewChat?: boolean;
+  onMovePageLeft?: () => void;
+  canMovePageLeft?: boolean;
+  onMovePageRight?: () => void;
+  canMovePageRight?: boolean;
   onDeleteQa?: (userMessageId: string) => void;
+  onMoveQaToNewPage?: (userMessageId: string) => void;
+  onMoveQaAndBeneathToNewPage?: (userMessageId: string) => void;
   streamingDisplay?: StreamingDisplaySettings;
   layoutMode?: PageCardLayoutMode;
   onLayoutModeChange?: (mode: PageCardLayoutMode) => void;
@@ -110,7 +126,13 @@ export const PageCard = memo(function PageCard({
   canNewPage = false,
   onMoveToNewChat,
   canMoveToNewChat = false,
+  onMovePageLeft,
+  canMovePageLeft = false,
+  onMovePageRight,
+  canMovePageRight = false,
   onDeleteQa,
+  onMoveQaToNewPage,
+  onMoveQaAndBeneathToNewPage,
   streamingDisplay,
   layoutMode = "scroll",
   onLayoutModeChange,
@@ -122,12 +144,15 @@ export const PageCard = memo(function PageCard({
   );
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const pinnedToBottomRef = useRef(true);
+  const pinnedPromptMessageIdRef = useRef<string | null>(null);
+  const wasStreamingRef = useRef(false);
   const seenUserMessageIdsRef = useRef<Set<string>>(new Set());
   const userScrollInitRef = useRef(false);
   const promptScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [composeViewportSpacerPx, setComposeViewportSpacerPx] = useState(0);
   const lastMessage = page.messages[page.messages.length - 1];
   const streamingMessage = streamingMessageId
     ? page.messages.find((message) => message.id === streamingMessageId)
@@ -149,16 +174,7 @@ export const PageCard = memo(function PageCard({
     isStreamingMessage,
     streamUpdate.updateMode,
     streamUpdate.pacedIntervalMs,
-    {
-      minChunkChars:
-        streamingDisplay?.renderMode === "markdown"
-          ? streamUpdate.updateMode === "smooth"
-            ? 320
-            : 220
-          : 1,
-      maxChunkDelayMs:
-        streamingDisplay?.renderMode === "markdown" ? 170 : 90,
-    },
+    { streamKey: streamingMessageId },
   );
   const streamingTextLength = streamingRawText.length;
 
@@ -273,18 +289,24 @@ export const PageCard = memo(function PageCard({
     }
 
     pinnedToBottomRef.current = false;
+    pinnedPromptMessageIdRef.current = newUserMessage.id;
+
+    const viewport = findScrollAreaViewport(scrollAreaRef.current);
+    const spacerPx = Math.max(0, (viewport?.clientHeight ?? 0) - 12);
+    setComposeViewportSpacerPx(spacerPx);
 
     let attempts = 0;
     const poll = () => {
-      const viewport = scrollAreaRef.current?.querySelector<HTMLElement>(
-        "[data-radix-scroll-area-viewport]",
-      );
-      if (!viewport) return;
+      const pollViewport = findScrollAreaViewport(scrollAreaRef.current);
+      if (!pollViewport) return;
 
-      if (scrollViewportToMessage(viewport, newUserMessage.id, "smooth")) {
-        if (autoFollowLiveReply) {
-          pinnedToBottomRef.current = true;
-        }
+      if (
+        scrollViewportToMessage(
+          pollViewport,
+          newUserMessage.id,
+          attempts === 0 ? "instant" : "smooth",
+        )
+      ) {
         return;
       }
 
@@ -294,7 +316,24 @@ export const PageCard = memo(function PageCard({
     };
 
     requestAnimationFrame(() => requestAnimationFrame(poll));
-  }, [autoFollowLiveReply, isLive, messageSectionIds, page.messages]);
+  }, [isLive, messageSectionIds, page.messages]);
+
+  useEffect(() => {
+    if (isLive) return;
+    pinnedPromptMessageIdRef.current = null;
+    setComposeViewportSpacerPx(0);
+  }, [isLive]);
+
+  useEffect(() => {
+    if (isStreaming) {
+      wasStreamingRef.current = true;
+      return;
+    }
+    if (!wasStreamingRef.current || !pinnedPromptMessageIdRef.current) return;
+    wasStreamingRef.current = false;
+    pinnedPromptMessageIdRef.current = null;
+    setComposeViewportSpacerPx(0);
+  }, [isStreaming]);
 
   useEffect(
     () => () => {
@@ -326,10 +365,10 @@ export const PageCard = memo(function PageCard({
 
   useEffect(() => {
     if (!autoFollowLiveReply || !isLive || !isStreaming) return;
+    if (pinnedPromptMessageIdRef.current) return;
+    if (lastMessage?.role !== "assistant") return;
 
-    const viewport = scrollAreaRef.current?.querySelector<HTMLElement>(
-      "[data-radix-scroll-area-viewport]",
-    );
+    const viewport = findScrollAreaViewport(scrollAreaRef.current);
     if (!viewport) return;
     if (!pinnedToBottomRef.current) return;
 
@@ -341,6 +380,8 @@ export const PageCard = memo(function PageCard({
     autoFollowLiveReply,
     isLive,
     isStreaming,
+    lastMessage?.id,
+    lastMessage?.role,
     page.messages.length,
     streamingTextLength,
   ]);
@@ -495,7 +536,11 @@ export const PageCard = memo(function PageCard({
             <span className="text-[11px] text-zinc-500">
               ~{(page.tokenEstimate / 1000).toFixed(1)}k
             </span>
-            {onDelete || onNewPage || onMoveToNewChat ? (
+            {onDelete ||
+            onNewPage ||
+            onMoveToNewChat ||
+            onMovePageLeft ||
+            onMovePageRight ? (
               <div onClick={(event) => event.stopPropagation()}>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -504,13 +549,39 @@ export const PageCard = memo(function PageCard({
                       variant="ghost"
                       size="icon"
                       aria-label={`${page.label} options`}
-                      disabled={!canDelete && !canNewPage && !canMoveToNewChat}
+                      disabled={
+                        !canDelete &&
+                        !canNewPage &&
+                        !canMoveToNewChat &&
+                        !canMovePageLeft &&
+                        !canMovePageRight
+                      }
                       className="h-7 w-7 shrink-0 text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
                     >
                       <MoreVertical className="h-3.5 w-3.5" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-[12rem]">
+                    {onMovePageLeft ? (
+                      <DropdownMenuItem
+                        disabled={!canMovePageLeft}
+                        className="gap-2 text-[13px]"
+                        onSelect={() => onMovePageLeft()}
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                        Move page to left
+                      </DropdownMenuItem>
+                    ) : null}
+                    {onMovePageRight ? (
+                      <DropdownMenuItem
+                        disabled={!canMovePageRight}
+                        className="gap-2 text-[13px]"
+                        onSelect={() => onMovePageRight()}
+                      >
+                        <ArrowRight className="h-3.5 w-3.5" />
+                        Move page to right
+                      </DropdownMenuItem>
+                    ) : null}
                     {onNewPage ? (
                       <DropdownMenuItem
                         disabled={!canNewPage}
@@ -572,9 +643,7 @@ export const PageCard = memo(function PageCard({
                   animate: msg.id !== streamingMessageId,
                   displayText:
                     msg.id === streamingMessageId
-                      ? streamingDisplay?.renderMode === "streamdown"
-                        ? streamingRawText
-                        : throttledStream.displayed
+                      ? throttledStream.displayed
                       : undefined,
                   streamRenderMode: streamingDisplay?.renderMode,
                   containedReplyScroll,
@@ -582,7 +651,12 @@ export const PageCard = memo(function PageCard({
                 } as const;
 
                 if (msg.role === "user") {
-                  const deleteQaEnabled = !page.sealed;
+                  const qaMenuEnabled = !page.sealed;
+                  const canMoveQaToNewPage =
+                    qaMenuEnabled && canMoveQaToNewPageOnPage(page, msg.id);
+                  const canMoveQaAndBeneath =
+                    qaMenuEnabled &&
+                    canMoveQaAndBeneathToNewPageOnPage(page, msg.id);
 
                   return (
                     <div
@@ -591,7 +665,9 @@ export const PageCard = memo(function PageCard({
                       data-section-id={sectionId}
                       className="flex items-start justify-end gap-0.5"
                     >
-                      {onDeleteQa ? (
+                      {onDeleteQa ||
+                      onMoveQaToNewPage ||
+                      onMoveQaAndBeneathToNewPage ? (
                         <div
                           className="mt-1 shrink-0"
                           onClick={(event) => event.stopPropagation()}
@@ -603,7 +679,11 @@ export const PageCard = memo(function PageCard({
                                 variant="ghost"
                                 size="icon"
                                 aria-label="Prompt options"
-                                disabled={!deleteQaEnabled}
+                                disabled={
+                                  !qaMenuEnabled &&
+                                  !canMoveQaToNewPage &&
+                                  !canMoveQaAndBeneath
+                                }
                                 className="h-6 w-6 text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200"
                               >
                                 <MoreVertical className="h-3 w-3" />
@@ -611,16 +691,40 @@ export const PageCard = memo(function PageCard({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
                               align="end"
-                              className="min-w-[10rem]"
+                              className="min-w-[14rem]"
                             >
-                              <DropdownMenuItem
-                                disabled={!deleteQaEnabled}
-                                className="gap-2 text-[13px] text-red-600 focus:bg-red-50 focus:text-red-600 dark:text-red-400 dark:focus:bg-red-950/40 dark:focus:text-red-400"
-                                onSelect={() => onDeleteQa(msg.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Delete Q&A
-                              </DropdownMenuItem>
+                              {onMoveQaToNewPage ? (
+                                <DropdownMenuItem
+                                  disabled={!canMoveQaToNewPage}
+                                  className="gap-2 text-[13px]"
+                                  onSelect={() => onMoveQaToNewPage(msg.id)}
+                                >
+                                  <SplitSquareHorizontal className="h-3.5 w-3.5" />
+                                  Move to New Page
+                                </DropdownMenuItem>
+                              ) : null}
+                              {onMoveQaAndBeneathToNewPage ? (
+                                <DropdownMenuItem
+                                  disabled={!canMoveQaAndBeneath}
+                                  className="gap-2 text-[13px]"
+                                  onSelect={() =>
+                                    onMoveQaAndBeneathToNewPage(msg.id)
+                                  }
+                                >
+                                  <SplitSquareHorizontal className="h-3.5 w-3.5" />
+                                  Move This And Beneath To New Page
+                                </DropdownMenuItem>
+                              ) : null}
+                              {onDeleteQa ? (
+                                <DropdownMenuItem
+                                  disabled={!qaMenuEnabled}
+                                  className="gap-2 text-[13px] text-red-600 focus:bg-red-50 focus:text-red-600 dark:text-red-400 dark:focus:bg-red-950/40 dark:focus:text-red-400"
+                                  onSelect={() => onDeleteQa(msg.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Delete Q&A
+                                </DropdownMenuItem>
+                              ) : null}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -652,6 +756,13 @@ export const PageCard = memo(function PageCard({
                     </div>
                   </div>
                 </div>
+              ) : null}
+              {composeViewportSpacerPx > 0 ? (
+                <div
+                  aria-hidden
+                  className="pointer-events-none shrink-0"
+                  style={{ minHeight: `${composeViewportSpacerPx}px` }}
+                />
               ) : null}
             </div>
             </PageSlugPlanProvider>
@@ -689,7 +800,13 @@ export const PageCard = memo(function PageCard({
     prev.onNewPage === next.onNewPage &&
     prev.canMoveToNewChat === next.canMoveToNewChat &&
     prev.onMoveToNewChat === next.onMoveToNewChat &&
+    prev.canMovePageLeft === next.canMovePageLeft &&
+    prev.onMovePageLeft === next.onMovePageLeft &&
+    prev.canMovePageRight === next.canMovePageRight &&
+    prev.onMovePageRight === next.onMovePageRight &&
     prev.onDeleteQa === next.onDeleteQa &&
+    prev.onMoveQaToNewPage === next.onMoveQaToNewPage &&
+    prev.onMoveQaAndBeneathToNewPage === next.onMoveQaAndBeneathToNewPage &&
     prev.streamingDisplay === next.streamingDisplay &&
     prev.layoutMode === next.layoutMode &&
     prev.onLayoutModeChange === next.onLayoutModeChange
